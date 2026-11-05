@@ -1,0 +1,7 @@
+build/
+.DS_Store
+__pycache__/
+*.fwsc
+.codewhale/
+# the installable package is committed on purpose: see "How to load the firmware" in the README
+!ReplicantFM1-*.fwsc
