@@ -51,7 +51,11 @@ jobs:
           grep -q "webapp/installer" site/index.html
           ls -l site/firmware/
 
+      # enablement: a fresh repo has Pages off; the job's pages: write lets the action turn it on itself, so
+      # publishing works from a clean clone without a click in Settings
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
