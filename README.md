@@ -4,6 +4,10 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 [![Hardware: M-VAVE FM-1](https://img.shields.io/badge/hardware-M--VAVE%20FM--1-black.svg)](https://www.m-vave.com/product?id=fm-1)
+[![Install: browser installer](https://img.shields.io/badge/install-browser%20installer-6cf260.svg)](https://danimanx.github.io/ReplicantFM1/)
+
+**Install it from the browser:** <https://danimanx.github.io/ReplicantFM1/> — Chrome or Edge on a desktop, the
+FM-1 on a USB cable, back up first. The same site serves the [browser editor](https://danimanx.github.io/ReplicantFM1/webapp/editor/).
 
 ReplicantFM1 turns the FM-1 into a four-track hard techno instrument: a kick that carries on a phone speaker,
 drums and hi-hats, a driven bass and rumble, 303-style acid lines and offbeat stabs — with per-sound drive,
@@ -185,7 +189,14 @@ restarts the FM-1 and checks the installed identity. It exits non-zero on a miss
 connection (`4`) or a timeout (`5`) rather than leaving you guessing; `--info` lists what it sees without
 writing anything.
 
-**2b. Browser installer (Chrome or Edge on a desktop):**
+**2b. Browser installer (Chrome or Edge on a desktop) — the easy way:**
+
+Open **<https://danimanx.github.io/ReplicantFM1/>** and press *Install*. Nothing to download, nothing to run
+locally: the page speaks USB-MIDI to the FM-1 itself, and the package it writes is byte for byte this
+repository's `ReplicantFM1-1.8.1-ht1.fwsc` (610286 B, identity `FM-1_900`). The
+[editor](https://danimanx.github.io/ReplicantFM1/webapp/editor/) lives on the same site.
+
+To serve that site yourself from a checkout instead (offline, or a modified build):
 
 ```sh
 python3 web/make_site.py ReplicantFM1-1.8.1-ht1.fwsc 1.8.1-ht1 out-site
