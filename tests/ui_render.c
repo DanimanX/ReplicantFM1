@@ -653,6 +653,8 @@ static void mono_check(void)
 {
     uint32_t i, bw = settings.palette == UI_BW_INDEX;
     if (settings.palette != UI_GREY_INDEX && !bw) return;
+    if (strstr(cur_name, "/splash")) return;          /* ReplicantFM1: the splash is drawn in the brand's greens, not
+                                                       * in the session palette (src/ui_draw.c draw_splash) */
     for (i = 0; i < 240u * 240u; i++) {
         uint16_t c = swap16(host_screen[i]);
         int32_t d = (int32_t)((c >> 5) & 63u) - (int32_t)(c >> 11) * 2;
@@ -1678,30 +1680,23 @@ static void draw(int s)
         in_splash = 1;
         draw_splash();
         in_splash = 0;
-        {   /* the square whole on the screen (176 x 176 at 32,32, more than the canvas): its edges and square corners
-             * RAISE, BG just outside; its text's ink 16 px in from the left and the top (the bottom: AL_B, the hook) */
-            const int32_t q0 = 32, q1 = 32 + 176 - 1;
-            uint16_t bg = host_screen[0], ra = host_screen[(uint32_t)(q0 + 1) * 240u + (uint32_t)q0 + 1];
-            int32_t i, x, y, ix = 999, iy = 999, bad = ra == bg;
-            for (i = q0 - 1; i <= q1 + 1; i++) {
-                int32_t in = i >= q0 && i <= q1;
-                bad |= host_screen[(uint32_t)(q0 - 1) * 240u + (uint32_t)i] != bg || host_screen[(uint32_t)(q1 + 1) * 240u + (uint32_t)i] != bg
-                    || host_screen[(uint32_t)i * 240u + (uint32_t)(q0 - 1)] != bg || host_screen[(uint32_t)i * 240u + (uint32_t)(q1 + 1)] != bg;
-                if (in)
-                    bad |= host_screen[(uint32_t)q0 * 240u + (uint32_t)i] != ra || host_screen[(uint32_t)q1 * 240u + (uint32_t)i] != ra
-                        || host_screen[(uint32_t)i * 240u + (uint32_t)q0] != ra || host_screen[(uint32_t)i * 240u + (uint32_t)q1] != ra;
-            }
-            for (y = q0; y <= q1; y++)
-                for (x = q0; x <= q1; x++)
-                    if (host_screen[(uint32_t)y * 240u + (uint32_t)x] != ra) {
-                        if (x - q0 < ix) ix = x - q0;
-                        if (y - q0 < iy) iy = y - q0;
-                    }
-            /* ReplicantFM1: the top 15..17, not 16 exactly: the dot of an i and a round glyph's overshoot sit a
-             * pixel above the cap line in Inter Tight at this size (the band is still placed by its cap line) */
-            if (bad || ix != 16 || iy < 15 || iy > 17) {
-                if (rep) fprintf(rep, "FIND %-26s the splash square not whole (edges %s) or its text not 16 px in (left %d, top %d)\n",
-                                 cur_name, bad ? "off" : "ok", (int)ix, (int)iy);
+        {   /* ReplicantFM1: the mark. The ground is the brand's near-black green everywhere (the corners too, and
+             * under the text); the particle is a big green thing in the middle -- most of the box it covers is not
+             * ground -- with its acid nucleus at the centre; nothing else is drawn on that band */
+            const uint16_t bg = host_screen[0];
+            const int32_t cx = 120, cy = 116, r = 60;      /* the particle's box: capsid + spikes + knobs */
+            int32_t x, y, ink = 0, bad = 0;
+            for (x = 0; x < 240; x++)
+                bad |= host_screen[(uint32_t)x] != bg || host_screen[239u * 240u + (uint32_t)x] != bg;   /* corners' rows */
+            for (y = cy - r; y <= cy + r; y++)
+                for (x = cx - r; x <= cx + r; x++)
+                    if (host_screen[(uint32_t)y * 240u + (uint32_t)x] != bg)
+                        ink++;
+            /* 120 x 120 box, the particle ~ 112 across: well over half of it is drawn on */
+            if (bad || ink < 120 * 120 * 3 / 5 || host_screen[(uint32_t)cy * 240u + (uint32_t)cx] == bg) {
+                if (rep) fprintf(rep, "FIND %-26s the splash's mark is not whole (ground %s, %d of %d px, centre %s)\n",
+                                 cur_name, bad ? "broken" : "ok", (int)ink, 120 * 120,
+                                 host_screen[(uint32_t)cy * 240u + (uint32_t)cx] == bg ? "blank" : "drawn");
                 nfind++;
             }
         }
@@ -2263,7 +2258,8 @@ int main(int argc, char **argv)
     const char *out = argc > 1 ? argv[1] : "build/ui_new";
     char path[600];
     uint32_t p, s;
-    static const char *const SHOW[] = {"GREY", "MONO", "GREEN", "PAPER", "NIGHT"};   /* (NIGHT: #50, to review) */
+    static const char *const SHOW[] = {"GREY", "MONO", "GREEN", "PAPER", "NIGHT", "VIRUS"};   /* (NIGHT: #50, to review;
+                                                       * VIRUS: ReplicantFM1's default, the screens in docs/screens) */
     snprintf(path, sizeof path, "%s/report.txt", out);
     rep = fopen(path, "w");
     if (!rep) { fprintf(stderr, "cannot write %s\n", path); return 1; }

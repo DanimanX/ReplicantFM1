@@ -35,7 +35,8 @@ int main(void)
     p = original;
     assert(settings_import(&p, sizeof p) == 1); settings_init();
     assert(settings.palette == UI_GREY_INDEX && fx_lowcut && settings.zoom && panel.enc[0] == 3);
-    assert(p.palette == palette_to_stored(UI_GREY_INDEX));        /* migrated in place */
+    assert(p.palette == palette_to_stored(settings.palette));     /* migrated in place (ReplicantFM1: no old
+                                                                   * setting here, the palette keeps its id) */
     {   /* every old id maps to a palette; tagged ids round trip; anything else is GREY */
         persist_t q = original;
         for (uint32_t i = 0; i < 20u; i++) assert(palette_from_stored(i) < NPALETTES);
@@ -45,8 +46,10 @@ int main(void)
         /* 1.0.2: the old MONO keeps its id as GREY (a saved MONO looks the same); the new black and white MONO is
          * appended, a new id */
         assert(palette_from_stored(UI_PAL_TAG + 0u) == UI_GREY_INDEX && !strcmp(UI_PALETTES[UI_GREY_INDEX].name, "GREY"));
-        assert(UI_BW_INDEX == NPALETTES - 1u && !strcmp(UI_PALETTES[UI_BW_INDEX].name, "MONO") &&
-               palette_from_stored(UI_PAL_TAG + UI_BW_INDEX) == UI_BW_INDEX && palette_stored_ok(UI_PAL_TAG + UI_BW_INDEX));
+        /* ReplicantFM1 appends VIRUS after MONO: MONO keeps id 9, so a saved MONO still opens MONO */
+        assert(UI_BW_INDEX == 9u && !strcmp(UI_PALETTES[UI_BW_INDEX].name, "MONO") &&
+               palette_from_stored(UI_PAL_TAG + UI_BW_INDEX) == UI_BW_INDEX && palette_stored_ok(UI_PAL_TAG + UI_BW_INDEX) &&
+               !strcmp(UI_PALETTES[UI_DEFAULT_INDEX].name, "VIRUS"));
         q.palette = palette_to_stored(5);
         assert(settings_import(&q, sizeof q) == 1 && settings.palette == 5u);
         settings.magic = SETTINGS_MAGIC_OLD; settings.palette = 13; settings_init();   /* retained SET3 */

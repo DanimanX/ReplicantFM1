@@ -75,10 +75,18 @@ rolls into the kick).
 150 BPM, straight, delay and room at techno settings. The sequencers start **empty**, exactly as Felucca ships:
 press `PLAY` and nothing sounds until you load patterns, so the first thing you hear is what you played.
 
+### The look
+
+It also boots in `VIRUS`, the fork's own palette: a near-black green ground, phosphor green for values, curves and
+selections, acid lime for the one active thing. It is appended as the eleventh palette, so every saved palette id
+still opens the same palette it did on Felucca; `MENU` → `DISPLAY` → `COLOR` (or the editor) picks any of the
+eleven. The power-on splash is drawn in the same five colours: a virus particle with an acid nucleus, the name and
+version above it, `hard techno FM-1` and the lineage below.
+
 ## The panel in pictures
 
 These are captures of the firmware's own drawing code, rendered by the test suite at 240×240 and doubled here
-(`docs/screens/`, `GREY` palette). Nothing is a mock-up.
+(`docs/screens/`, the default `VIRUS` palette). Nothing is a mock-up.
 
 <table>
 <tr>

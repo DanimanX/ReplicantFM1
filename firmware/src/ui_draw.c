@@ -1349,40 +1349,136 @@ static void draw_columns(void)
 }
 
 
-/* The power-on splash (main.c fm1_main, web/emu felucca_web.c; 1.1.5): a RAISE square centred on the screen, square
- * corners (in every style; LINE too: RAISE from the palette's SURF), in it in AF_M, the ink SPL_PAD in from the left:
- * at the top the name and the version, the first line's capitals' top SPL_PAD down; at the bottom the maker and
- * "with community", the last line's capitals' bottom (its baseline) SPL_PAD up from the square's bottom. Both
- * margins are measured to the capitals (the descender of "community" hangs into the bottom one, as off a baseline).
- * The square (176 x 176) is more than the canvas (CV_MAX, 240 x 124): it is filled straight on the screen and its
- * two text bands drawn on it as canvases, the top one from the square's top edge, the bottom one to its bottom edge.
- * In the saved palette (settings_init before it) */
-#define SPL_SQ 176                                  /* the square (even: centred exactly) */
-#define SPL_X0 ((240u - SPL_SQ) / 2u)               /* its top-left on the screen (x and y) */
-#define SPL_PAD 16                                  /* the text's inset: left (its ink), top and bottom (the capitals) */
-#define SPL_PITCH 20                                /* line to line */
-static const char *const SPLASH_LINES[] = {"Replicant", FELUCCA_VERSION, "hard techno FM-1", "after Felucca"};
-/* a band of two lines, h tall, at y on the screen: the first line's top at ly; the two lines' capitals declared
- * against al0..al1 (mode: AL_V the band centred there, AL_B the last baseline on al1) */
-static void splash_band(uint32_t y, uint32_t h, int32_t ly, const char *const *l, uint32_t mode, int32_t al0,
-                        int32_t al1, const char *tag)
+/* The power-on splash (main.c fm1_main, before the UI). ReplicantFM1's mark: a virus particle -- a dark capsid
+ * with a bright rim, eight spikes with knobs and a glowing acid nucleus -- on a near-black green ground, with the
+ * name and the version above it and the machine and its lineage below. Big: the particle is 112 px across on a
+ * 240 px screen, so it reads at arm's length across a club.
+ *
+ * The splash is drawn in the brand's own five colours, not the session palette's: it is the firmware's face (the
+ * palette belongs to the session and can be any of the eleven, including the light PAPER one). The particle is
+ * built on the canvas (CV_MAX, 240 x 124) with antialiased discs and thick lines, then blitted; the four lines of
+ * text are one-shot boxes in the same ground colour, so nothing shows as a band. */
+#define SPL_BG 0x0061u          /* the ground: RGB565 (5, 13, 8), near-black green */
+#define SPL_GRN 0x6F8Cu         /* the particle: (104, 242, 96), phosphor green */
+#define SPL_DIM 0x1244u         /* its body: (22, 74, 34) */
+#define SPL_MID 0x3C47u         /* the spikes: green blended 45 % into the ground */
+#define SPL_SOFT 0x662Fu        /* "after Felucca": (96, 196, 120), a quiet green, still readable on the ground */
+#define SPL_ACC 0xD7E8u         /* the nucleus and the knobs: (214, 255, 64), acid lime */
+#define SPL_TXT 0xD7FAu         /* the text: (208, 255, 214) */
+#define SPL_CX 120              /* the particle's centre */
+#define SPL_CY 116
+#define SPL_R 38                /* the capsid's radius */
+#define SPL_SPIKE 13            /* how far a spike reaches past it */
+#define SPL_KNOB 5              /* the knob at the spike's end */
+#define SPL_TOP 54              /* where the canvas the particle is drawn on is blitted (SPL_CVH = 124 rows) */
+#define SPL_CVH 124
+/* the eight spike directions, x and y in hundredths */
+static const int8_t SPL_DIR[8][2] = {{100, 0}, {71, 71}, {0, 100}, {-71, 71}, {-100, 0}, {-71, -71}, {0, -100}, {71, -71}};
+
+/* integer square root (bit by bit: no float, no divide, fine at boot) */
+static uint32_t spl_isqrt(uint32_t v)
 {
-    cv_begin(SPL_SQ, h, T_RAISE);
-    GFX_HOOK_ALIGN(0, al0, 0, al1, mode | AL_N(2), tag);
-    cv_text_on(SPL_PAD, ly, &AF_M, l[0], T_TEXT, T_RAISE);
-    cv_text_on(SPL_PAD, ly + SPL_PITCH, &AF_M, l[1], T_TEXT, T_RAISE);
-    cv_blit(SPL_X0, y);
+    uint32_t r = 0, b = 1u << 30;
+    while (b > v)
+        b >>= 2;
+    while (b) {
+        if (v >= r + b) {
+            v -= r + b;
+            r = (r >> 1) + b;
+        } else {
+            r >>= 1;
+        }
+        b >>= 2;
+    }
+    return r;
+}
+/* a blend of two RGB565 colours, the gfx.c ux_mix without its MONO rule (the splash keeps its colour in every
+ * palette: ux_mix would grey it out on GREY and MONO, src/gfx.c) */
+static uint16_t spl_mix(uint16_t a, uint16_t b, uint32_t pct)
+{
+    static const uint8_t SH[3] = {11, 5, 0};
+    static const uint16_t MK[3] = {31, 63, 31};
+    uint32_t out = 0, k;
+    for (k = 0; k < 3u; k++) {
+        int32_t x = (a >> SH[k]) & MK[k], d = (int32_t)((b >> SH[k]) & MK[k]) - x;
+        int32_t v = x + (int32_t)((d * (int32_t)pct + (d >= 0 ? 50 : -50)) / 100);
+        if (v < 0)
+            v = 0;
+        else if ((uint32_t)v > MK[k])
+            v = MK[k];                                  /* (the disc edge asks up to 125 %: clamp, or the green
+                                                         * carries into the red bits and the rim turns magenta) */
+        out |= (uint32_t)v << SH[k];
+    }
+    return (uint16_t)out;
+}
+/* one canvas pixel, c at pct % over what is already there (the glow and the edges blend; nothing is erased) */
+static void spl_px(int32_t x, int32_t y, uint16_t c, uint32_t pct)
+{
+    uint32_t i;
+    if (x < 0 || y < 0 || (uint32_t)x >= cv_w || (uint32_t)y >= cv_h)
+        return;
+    i = (uint32_t)y * cv_w + (uint32_t)x;
+    cv_px[i] = swap16(spl_mix(swap16(cv_px[i]), c, pct));
+}
+/* a filled disc with a half-pixel antialiased edge: rows, one square root each, the two end pixels blended */
+static void spl_disc(int32_t cx, int32_t cy, int32_t r, uint16_t c, uint32_t pct)
+{
+    int32_t y;
+    if (r <= 0)
+        return;
+    for (y = cy - r; y <= cy + r; y++) {
+        int32_t dy = y - cy, q, w, x;
+        uint32_t rr = (uint32_t)(r * r) - (uint32_t)(dy * dy);
+        q = (int32_t)spl_isqrt(rr * 16u);              /* four times the row's half width */
+        w = q >> 2;
+        for (x = cx - w + 1; x <= cx + w - 1; x++)
+            spl_px(x, y, c, pct);
+        spl_px(cx - w, y, c, (pct * (4u - ((uint32_t)q & 3u))) / 4u);   /* 100 .. 25 %: the row's end pixel,
+                                                                          * by how much of it the disc covers */
+        spl_px(cx + w, y, c, (pct * (4u - ((uint32_t)q & 3u))) / 4u);
+    }
+}
+/* the particle's spikes: a thick line out of the capsid and a knob at its end */
+static void spl_spikes(int32_t cx, int32_t cy)
+{
+    uint32_t i;
+    for (i = 0; i < 8u; i++) {
+        int32_t dx = SPL_DIR[i][0], dy = SPL_DIR[i][1];
+        int32_t x0 = cx + dx * (SPL_R - 12) / 100, y0 = cy + dy * (SPL_R - 12) / 100;
+        int32_t x1 = cx + dx * (SPL_R + SPL_SPIKE) / 100, y1 = cy + dy * (SPL_R + SPL_SPIKE) / 100;
+        cv_line_t(x0, y0, x1, y1, SPL_MID, 5);
+        spl_disc(x1, y1, SPL_KNOB, SPL_GRN, 100);      /* the knob */
+        spl_disc(x1, y1, SPL_KNOB - 2, SPL_ACC, 100);  /* its acid centre */
+    }
+}
+/* the particle: glow, spikes, capsid, body, nucleus */
+static void spl_virus(int32_t cx, int32_t cy)
+{
+    uint32_t i;
+    for (i = 0; i < 11u; i++)                          /* the halo: eleven discs, 4 % each, growing smoother */
+        spl_disc(cx, cy, SPL_R + 22 - (int32_t)i * 2, SPL_GRN, 4);
+    spl_spikes(cx, cy);
+    spl_disc(cx, cy, SPL_R, SPL_GRN, 100);             /* the rim */
+    spl_disc(cx, cy, SPL_R - 4, SPL_DIM, 100);         /* the body, 4 px of rim left */
+    for (i = 0; i < 8u; i++) {                         /* the capsid: a knob of shell at every spike's foot */
+        int32_t x = cx + SPL_DIR[i][0] * (SPL_R - 9) / 100, y = cy + SPL_DIR[i][1] * (SPL_R - 9) / 100;
+        spl_disc(x, y, 4, SPL_GRN, 55);
+    }
+    spl_disc(cx, cy, 15, SPL_BG, 100);                 /* the nucleus' well */
+    spl_disc(cx, cy, 11, SPL_ACC, 90);
+    spl_disc(cx - 4, cy - 4, 3, SPL_TXT, 75);          /* its highlight */
 }
 static void draw_splash(void)
 {
-    int32_t h = SPL_PAD - AF_M_CAP_Y + SPL_PITCH + AF_M.h;     /* a band: its two lines, the descenders in */
-    int32_t lb = h - SPL_PAD - AF_M_CAP_H - AF_M_CAP_Y;         /* the bottom band's last line: its top */
-    lcd_fill(0, 0, 240, 240, T_BG);
-    lcd_fill(SPL_X0, SPL_X0, SPL_SQ, SPL_SQ, T_RAISE);
-    splash_band(SPL_X0, (uint32_t)h, SPL_PAD - AF_M_CAP_Y, SPLASH_LINES, AL_V, SPL_PAD,
-                SPL_PAD + SPL_PITCH + AF_M_CAP_H, "splash name + version SPL_PAD from the top");
-    splash_band(SPL_X0 + SPL_SQ - (uint32_t)h, (uint32_t)h, lb - SPL_PITCH, SPLASH_LINES + 2, AL_B, 0, h - SPL_PAD,
-                "splash maker's baseline SPL_PAD from the bottom");
+    static const char *const VER = FELUCCA_VERSION;
+    lcd_fill(0, 0, 240, 240, SPL_BG);
+    cv_begin(240, SPL_CVH, SPL_BG);
+    spl_virus(SPL_CX, SPL_CY - SPL_TOP);
+    cv_blit(0, SPL_TOP);
+    draw_text_line(0, 8, 240, &AF_L, "Replicant", SPL_TXT, SPL_BG, 1);
+    draw_text_line(0, 44, 240, &AF_S, VER, SPL_ACC, SPL_BG, 1);
+    draw_text_line(0, 190, 240, &AF_M, "hard techno FM-1", SPL_TXT, SPL_BG, 1);
+    draw_text_line(0, 214, 240, &AF_S, "after Felucca", SPL_SOFT, SPL_BG, 1);
     lcd_sync();
 }
 

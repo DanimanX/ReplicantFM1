@@ -1,0 +1,104 @@
+name: build
+
+# Builds the firmware for the M-VAVE FM-1 from source and runs the host test suite. No hardware is involved:
+# the toolchain is JieLi's pi32v2 clang, three files come from the AC79 SDK, and the tests render the firmware's
+# own DSP and UI code on the runner.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    name: firmware + tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # the build rasterises the UI font and icons at build time
+      - name: Python build dependencies
+        run: pip install --disable-pip-version-check pillow fonttools
+
+      # ~25 MB from JieLi's package server; cached between runs
+      - name: JieLi pi32v2 toolchain
+        run: |
+          if [ -x "$HOME/.jieli/toolchain/pi32v2/bin/clang" ]; then
+            echo "toolchain already in the cache"
+          else
+            for i in 1 2 3; do tools/get_toolchain.sh && break || sleep 5; done
+          fi
+          test -x "$HOME/.jieli/toolchain/pi32v2/bin/clang"
+
+      # the package needs uboot.boot, cfg_tool.bin and eq_cfg_hw.bin; a sparse checkout keeps it small
+      - name: JieLi AC79 SDK (sparse)
+        run: |
+          SDK="$HOME/fw-AC79_AIoT_SDK"
+          if [ -f "$SDK/cpu/wl82/tools/uboot.boot" ]; then
+            echo "SDK already in the cache"
+          else
+            for i in 1 2 3; do
+              rm -rf "$SDK"
+              git clone --depth 1 --filter=blob:none --sparse \
+                --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+                https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$SDK" && break || sleep 10
+            done
+            git -C "$SDK" sparse-checkout set cpu/wl82/tools
+          fi
+          test -f "$SDK/cpu/wl82/tools/uboot.boot"
+
+      - name: Build the firmware
+        env:
+          AC79_SDK: /home/runner/fw-AC79_AIoT_SDK
+          JIELI_TOOLCHAIN: /home/runner/.jieli/toolchain
+        run: ./build.sh
+
+      - name: Host test suite
+        env:
+          AC79_SDK: /home/runner/fw-AC79_AIoT_SDK
+          JIELI_TOOLCHAIN: /home/runner/.jieli/toolchain
+        run: sh tests/run_tests.sh
+
+      - name: Package identity
+        run: |
+          python3 - <<'PY'
+          import re
+          d = open("build/felucca.fwsc", "rb").read()
+          m = re.search(rb"FM-1_\d{3}", d)
+          print("package", len(d), "bytes, identity", m.group(0).decode() if m else "MISSING")
+          raise SystemExit(0 if m else 1)
+          PY
+
+      - name: Upload the firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReplicantFM1-firmware
+          if-no-files-found: error
+          path: |
+            build/felucca.fwsc
+            build/felucca.bin
+            build/loader/ota.bin
+
+      # a tag builds the release: the package with a name that says what it is
+      - name: Name the package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: cp build/felucca.fwsc "ReplicantFM1-${GITHUB_REF_NAME#v}.fwsc"
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "ReplicantFM1 $GITHUB_REF_NAME" \
+            --notes "Hard techno firmware for the M-VAVE FM-1. Install with the web installer (https://danimanx.github.io/ReplicantFM1/) or \`python3 tools/fm1_install.py\`. Back up the FM-1 first; see the README." \
+            "ReplicantFM1-${GITHUB_REF_NAME#v}.fwsc" build/felucca.bin build/loader/ota.bin
