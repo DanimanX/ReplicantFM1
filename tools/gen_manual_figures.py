@@ -25,8 +25,9 @@ FONT = "'Barlow Semi Condensed', 'Arial Narrow', Arial, sans-serif"
 BODY, TRAY, KEY_W, KEY_B, KNOB, BTN, LABEL = "#3a3d42", "#26282c", "#d9dadc", "#c9cacd", "#1f2124", "#2e3135", "#e8e8ea"
 WHITE_N = 16
 BLACK_AFTER = [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14]          # black key k sits after white key BLACK_AFTER[k]
-SHOTS = {"t01_909.png": "screen-909.png", "t03_sh101.png": "screen-101.png", "t03_sh101_vcf.png": "screen-101-vcf.png",
-         "t03_sh101_seq.png": "screen-101-seq.png", "t04_303a.png": "screen-303.png", "t10_home.png": "screen-home.png",
+SHOTS = {"t00_splash.png": "screen-splash.png", "t01_909.png": "screen-909.png", "t03_sh101.png": "screen-101.png",
+         "t03_sh101_vcf.png": "screen-101-vcf.png", "t03_sh101_seq.png": "screen-101-seq.png",
+         "t04_303a.png": "screen-303.png", "t10_home.png": "screen-home.png",
          "t08_break.png": "screen-break.png", "t14_mix_pump.png": "screen-mix.png", "t15_list.png": "screen-list.png",
          "t19_ask.png": "screen-ask.png", "t02_909_readout.png": "screen-readout.png", "t06_tb3po.png": "screen-tb3po.png",
          "t12_fx.png": "screen-fx.png", "t17_global.png": "screen-global.png"}

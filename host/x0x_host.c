@@ -1162,6 +1162,8 @@ int main(int argc, char **argv)
             peak_out = 0.0f;
         else if (!strcmp(cmd, "wavstop"))
             wav_close();
+        else if (!strcmp(cmd, "splash"))
+            draw_splash();
         else if (!strcmp(cmd, "shot")) {
             snprintf(out, sizeof out, "%s/%s", dir, a);
             png_write(out);

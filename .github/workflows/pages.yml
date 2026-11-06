@@ -1,0 +1,66 @@
+name: pages
+
+# Publishes the browser installer, backup tool, breaks uploader, and manual to GitHub Pages
+# (https://danimanx.github.io/ReplicantFM1/) so the firmware can be installed from Chrome or Edge
+# over USB-MIDI with no toolchain or terminal needed.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install Pillow
+
+      - name: Find the package
+        id: pkg
+        run: |
+          PKG=$(ls -1 ReplicantFM1-*.fwsc build/x0x-*.fwsc build/x0x.fwsc 2>/dev/null | head -1)
+          echo "file=$PKG" >> "$GITHUB_OUTPUT"
+          echo "publishing $PKG"
+
+      - name: Build the site
+        run: python3 tools/make_pages.py "${{ steps.pkg.outputs.file }}" "2.0.0" site
+
+      - name: Verify site contents
+        run: |
+          test -f site/index.html
+          test -f site/install/index.html
+          test -f site/breaks/index.html
+          test -f site/backup/index.html
+          test -f site/manual/index.html
+          ls -l site/firmware/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -21,26 +21,30 @@ static int32_t cv_oy;            /* y offset for graph drawing */
 static int32_t cv_y0, cv_y1;     /* X0X: the rows drawing may touch (cv_band) */
 
 #define RGB(r, g, b) ((uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3)))
-#define C_BLACK 0x0000u
 #define C_WHITE 0xFFFFu              /* accent only: what is being touched / where we are */
 /* The screen's five steps, darkest to brightest, plus white; picked as THEME in GLOBAL. */
 typedef struct {
     const char *name;
+    uint16_t bg;
     uint16_t c[5];
 } palette_t;
-/* X0X: the first three steps are neutral greys in every theme (structure: rules, empty cells,
- * labels); only the two brightest carry the theme's hue (values, highlights). Colour on the
- * screen then means something: a part, a value, an alarm. */
+/* X0X: the first three steps are neutral greys in standard themes (structure: rules, empty cells,
+ * labels); only the two brightest carry the theme's hue (values, highlights).
+ * VIRUS: ReplicantFM1's default toxic green theme with near-black green ground, phosphor green
+ * and acid lime highlights. */
 #define NEUTRALS RGB(34, 34, 40), RGB(74, 74, 82), RGB(150, 150, 158)
 static const palette_t PALETTES[] = {
-    {"GREEN", {NEUTRALS, RGB(80, 220, 120), RGB(150, 255, 175)}},
-    {"AMBER", {NEUTRALS, RGB(232, 136, 30), RGB(255, 184, 70)}},
-    {"CYAN", {NEUTRALS, RGB(60, 180, 235), RGB(150, 225, 255)}},
-    {"RED", {NEUTRALS, RGB(232, 76, 60), RGB(255, 132, 112)}},
-    {"MONO", {NEUTRALS, RGB(196, 196, 202), RGB(236, 236, 240)}},
+    {"VIRUS", RGB(5, 13, 8), {RGB(18, 48, 25), RGB(38, 92, 48), RGB(104, 210, 114), RGB(104, 242, 96), RGB(214, 255, 64)}},
+    {"GREEN", 0x0000u, {NEUTRALS, RGB(80, 220, 120), RGB(150, 255, 175)}},
+    {"AMBER", 0x0000u, {NEUTRALS, RGB(232, 136, 30), RGB(255, 184, 70)}},
+    {"CYAN", 0x0000u, {NEUTRALS, RGB(60, 180, 235), RGB(150, 225, 255)}},
+    {"RED", 0x0000u, {NEUTRALS, RGB(232, 76, 60), RGB(255, 132, 112)}},
+    {"MONO", 0x0000u, {NEUTRALS, RGB(196, 196, 202), RGB(236, 236, 240)}},
 };
 #define NPALETTES (sizeof(PALETTES) / sizeof(PALETTES[0]))
-static uint16_t pal[5];
+static uint16_t pal_bg = RGB(5, 13, 8);
+#define C_BLACK pal_bg
+static uint16_t pal[5] = {RGB(18, 48, 25), RGB(38, 92, 48), RGB(104, 210, 114), RGB(104, 242, 96), RGB(214, 255, 64)};
 #define C_LINE pal[0]                /* 1 rules, separators */
 #define C_DIM pal[1]                 /* 2 inactive, empty steps, units */
 #define C_GRAY pal[2]                /* 3 labels */
@@ -50,6 +54,7 @@ static uint16_t pal[5];
 static void palette_set(uint32_t i)
 {
     uint32_t k;
+    pal_bg = PALETTES[i % NPALETTES].bg;
     for (k = 0; k < 5u; k++)
         pal[k] = PALETTES[i % NPALETTES].c[k];
 }
@@ -199,4 +204,135 @@ static void draw_text_box(uint32_t x, uint32_t y, uint32_t w, const felucca_font
     cv_text(tx, 0, f, s, c);
     cv_blit(x, y);
     lcd_sync();                     /* one-shots (boot, crash, UBOOT, update) finish here */
+}
+
+static void cv_line_t(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t c, int32_t thick)
+{
+    int32_t t;
+    for (t = -thick / 2; t <= thick / 2; t++)
+        cv_line(x0, y0 + t, x1, y1 + t, c);
+}
+
+/* The power-on splash: ReplicantFM1 virus particle */
+#define SPL_BG   0x0061u         /* near-black green ground: RGB565 (5, 13, 8) */
+#define SPL_GRN  0x6F8Cu         /* phosphor green: (104, 242, 96) */
+#define SPL_DIM  0x1244u         /* capsid body: (22, 74, 34) */
+#define SPL_MID  0x3C47u         /* spikes: green blended 45 % into ground */
+#define SPL_SOFT 0x662Fu         /* quiet green: (96, 196, 120) */
+#define SPL_ACC  0xD7E8u         /* acid lime: (214, 255, 64) */
+#define SPL_TXT  0xD7FAu         /* text: (208, 255, 214) */
+#define SPL_CX   120             /* particle centre */
+#define SPL_CY   116
+#define SPL_R    38              /* capsid radius */
+#define SPL_SPIKE 13             /* spike length past capsid */
+#define SPL_KNOB 5               /* knob at spike end */
+#define SPL_TOP  50              /* canvas blit top */
+#define SPL_CVH  130
+
+static const int8_t SPL_DIR[8][2] = {
+    {100, 0}, {71, 71}, {0, 100}, {-71, 71},
+    {-100, 0}, {-71, -71}, {0, -100}, {71, -71}
+};
+
+static uint32_t spl_isqrt(uint32_t v)
+{
+    uint32_t r = 0, b = 1u << 30;
+    while (b > v)
+        b >>= 2;
+    while (b) {
+        if (v >= r + b) {
+            v -= r + b;
+            r = (r >> 1) + b;
+        } else {
+            r >>= 1;
+        }
+        b >>= 2;
+    }
+    return r;
+}
+
+static uint16_t spl_mix(uint16_t a, uint16_t b, uint32_t pct)
+{
+    static const uint8_t SH[3] = {11, 5, 0};
+    static const uint16_t MK[3] = {31, 63, 31};
+    uint32_t out = 0, k;
+    for (k = 0; k < 3u; k++) {
+        int32_t x = (a >> SH[k]) & MK[k], d = (int32_t)((b >> SH[k]) & MK[k]) - x;
+        int32_t v = x + (int32_t)((d * (int32_t)pct + (d >= 0 ? 50 : -50)) / 100);
+        if (v < 0)
+            v = 0;
+        else if ((uint32_t)v > MK[k])
+            v = MK[k];
+        out |= (uint32_t)v << SH[k];
+    }
+    return (uint16_t)out;
+}
+
+static void spl_px(int32_t x, int32_t y, uint16_t c, uint32_t pct)
+{
+    uint32_t i;
+    if (x < 0 || y < 0 || (uint32_t)x >= cv_w || (uint32_t)y >= cv_h)
+        return;
+    i = (uint32_t)y * cv_w + (uint32_t)x;
+    cv_px[i] = swap16(spl_mix(swap16(cv_px[i]), c, pct));
+}
+
+static void spl_disc(int32_t cx, int32_t cy, int32_t r, uint16_t c, uint32_t pct)
+{
+    int32_t y;
+    if (r <= 0)
+        return;
+    for (y = cy - r; y <= cy + r; y++) {
+        int32_t dy = y - cy, q, w, x;
+        uint32_t rr = (uint32_t)(r * r) - (uint32_t)(dy * dy);
+        q = (int32_t)spl_isqrt(rr * 16u);
+        w = q >> 2;
+        for (x = cx - w + 1; x <= cx + w - 1; x++)
+            spl_px(x, y, c, pct);
+        spl_px(cx - w, y, c, (pct * (4u - ((uint32_t)q & 3u))) / 4u);
+        spl_px(cx + w, y, c, (pct * (4u - ((uint32_t)q & 3u))) / 4u);
+    }
+}
+
+static void spl_spikes(int32_t cx, int32_t cy)
+{
+    uint32_t i;
+    for (i = 0; i < 8u; i++) {
+        int32_t dx = SPL_DIR[i][0], dy = SPL_DIR[i][1];
+        int32_t x0 = cx + dx * (SPL_R - 12) / 100, y0 = cy + dy * (SPL_R - 12) / 100;
+        int32_t x1 = cx + dx * (SPL_R + SPL_SPIKE) / 100, y1 = cy + dy * (SPL_R + SPL_SPIKE) / 100;
+        cv_line_t(x0, y0, x1, y1, SPL_MID, 5);
+        spl_disc(x1, y1, SPL_KNOB, SPL_GRN, 100);
+        spl_disc(x1, y1, SPL_KNOB - 2, SPL_ACC, 100);
+    }
+}
+
+static void spl_virus(int32_t cx, int32_t cy)
+{
+    uint32_t i;
+    for (i = 0; i < 11u; i++)
+        spl_disc(cx, cy, SPL_R + 22 - (int32_t)i * 2, SPL_GRN, 4);
+    spl_spikes(cx, cy);
+    spl_disc(cx, cy, SPL_R, SPL_GRN, 100);
+    spl_disc(cx, cy, SPL_R - 4, SPL_DIM, 100);
+    for (i = 0; i < 8u; i++) {
+        int32_t x = cx + SPL_DIR[i][0] * (SPL_R - 9) / 100, y = cy + SPL_DIR[i][1] * (SPL_R - 9) / 100;
+        spl_disc(x, y, 4, SPL_GRN, 55);
+    }
+    spl_disc(cx, cy, 15, SPL_BG, 100);
+    spl_disc(cx, cy, 11, SPL_ACC, 90);
+    spl_disc(cx - 4, cy - 4, 3, SPL_TXT, 75);
+}
+
+static void draw_splash(void)
+{
+    lcd_fill(0, 0, 240, 240, SPL_BG);
+    cv_begin(240, SPL_CVH, SPL_BG);
+    spl_virus(SPL_CX, SPL_CY - SPL_TOP);
+    cv_blit(0, SPL_TOP);
+    draw_text_box(0, 10, 240, &FONT_M, "REPLICANT FM-1", SPL_TXT, 1);
+    draw_text_box(0, 34, 240, &FONT_S, "ACID GROOVEBOX", SPL_ACC, 1);
+    draw_text_box(0, 192, 240, &FONT_B, "909 . 101 . 303 . BREAK", SPL_GRN, 1);
+    draw_text_box(0, 214, 240, &FONT_S, "BY DANIMANX", SPL_SOFT, 1);
+    lcd_sync();
 }

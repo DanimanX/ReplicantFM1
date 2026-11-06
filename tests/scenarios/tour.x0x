@@ -1,4 +1,6 @@
 # A tour of every screen, for looking at (screenshots in build/scenarios/tour/).
+splash
+shot t00_splash.png
 wait 300
 # a little content
 tapkey b0

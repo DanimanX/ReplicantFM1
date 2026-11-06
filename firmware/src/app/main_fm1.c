@@ -401,9 +401,9 @@ static void fm1_main(void)
         }
     }
     lcd_init();
-    palette_set(1);
-    draw_text_box(0, 96, 240, &FONT_M, "ReplicantFM1", C_HI, 1);
-    draw_text_box(0, 134, 240, &FONT_S, "909 SH-101 303 303 BREAK", C_GRAY, 1);
+    palette_set(0);
+    draw_splash();
+    fm1_delay_ms(450);
     if (x0x_dbg.magic != DBG_MAGIC) {
         memset(&x0x_dbg, 0, sizeof x0x_dbg);
         x0x_dbg.magic = DBG_MAGIC;

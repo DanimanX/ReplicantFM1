@@ -1,8 +1,14 @@
 # ReplicantFM1
 
+[![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+[![Hardware: M-VAVE FM-1](https://img.shields.io/badge/hardware-M--VAVE%20FM--1-black.svg)](https://www.m-vave.com/product?id=fm-1)
+[![Install: browser installer](https://img.shields.io/badge/install-browser%20installer-6cf260.svg)](https://danimanx.github.io/ReplicantFM1/)
+
 **ReplicantFM1** turns the M-VAVE FM-1 into an acid, techno, and big-beat groovebox: an authentic **TR-909** drum machine, a modelled **Roland SH-101** monophonic synthesizer, dual **TB-303** acid basslines (303A & 303B) powered by the **TB-3PO** generative algorithm, and a real-time sliced **breakbeat player**, all performing simultaneously in stereo.
 
 Each part can run its own independent step length (up to 64 steps), clock rate, and polymetric drift. You can arrange patterns into full songs, automate and record knob motions live or step-by-step (parameter locking), and give every single step probability and condition cycles. The mix runs through a shared stereo reverb, tape ping-pong delay, and a master bus featuring tube drive, resonant filter, and a sidechain **Master Pump** compressor driven by the 909 kick.
+
+The interface features the signature **VIRUS** toxic green aesthetic: a near-black green ground, glowing toxic phosphor green tracks and labels, and acid lime accents, paired with the iconic virus particle boot splash screen on startup.
 
 Over USB, the FM-1 acts as a class-compliant MIDI controller/interface and a 24-bit stereo audio interface with no drivers required.
 
@@ -12,17 +18,19 @@ Over USB, the FM-1 acts as a class-compliant MIDI controller/interface and a 24-
 
 ## Screen Gallery
 
-| Home Overview | Roland SH-101 VCO |
+| Boot Splash Screen | Home Overview |
 |---|---|
-| ![Home Screen](docs/img/screen-home.png) | ![SH-101 VCO](docs/img/screen-101.png) |
-| **Roland SH-101 VCF** | **Roland SH-101 Sequencer** |
-| ![SH-101 VCF](docs/img/screen-101-vcf.png) | ![SH-101 Sequencer](docs/img/screen-101-seq.png) |
-| **TR-909 Drum Grid** | **TB-303 Acid Bassline** |
-| ![TR-909](docs/img/screen-909.png) | ![TB-303](docs/img/screen-303.png) |
-| **TB-3PO Algorithmic Generator** | **Breakbeat Slicer** |
-| ![TB-3PO](docs/img/screen-tb3po.png) | ![Breakbeat](docs/img/screen-break.png) |
-| **Master Bus & Compressor Pump** | **Stereo Reverb & Tape Delay** |
-| ![Mixer & Master](docs/img/screen-mix.png) | ![FX](docs/img/screen-fx.png) |
+| ![Boot Splash](docs/img/screen-splash.png) | ![Home Screen](docs/img/screen-home.png) |
+| **Roland SH-101 VCO** | **Roland SH-101 VCF** |
+| ![SH-101 VCO](docs/img/screen-101.png) | ![SH-101 VCF](docs/img/screen-101-vcf.png) |
+| **Roland SH-101 Sequencer** | **TR-909 Drum Grid** |
+| ![SH-101 Sequencer](docs/img/screen-101-seq.png) | ![TR-909](docs/img/screen-909.png) |
+| **TB-303 Acid Bassline** | **TB-3PO Algorithmic Generator** |
+| ![TB-303](docs/img/screen-303.png) | ![TB-3PO](docs/img/screen-tb3po.png) |
+| **Breakbeat Slicer** | **Master Bus & Compressor Pump** |
+| ![Breakbeat](docs/img/screen-break.png) | ![Mixer & Master](docs/img/screen-mix.png) |
+| **Stereo Reverb & Tape Delay** | **Full Parameter List** |
+| ![FX](docs/img/screen-fx.png) | ![List All](docs/img/screen-list.png) |
 
 ---
 
@@ -181,10 +189,21 @@ tests/run_tests.sh
 
 ## Installing Firmware
 
-1. Connect the M-VAVE FM-1 to your computer using a USB-C data cable.
-2. Open the web installer: `web/x0x_installer.html` in Chrome, Edge, or Opera (WebUSB enabled).
-3. Select your device and choose `build/x0x.fwsc`.
-4. Click **Install**. The FM-1 will flash the image and restart into ReplicantFM1.
+### 1. Browser Installer (Easiest — No Setup Needed)
+1. Open **[danimanx.github.io/ReplicantFM1](https://danimanx.github.io/ReplicantFM1/)** in Chrome or Edge on desktop.
+2. Connect the M-VAVE FM-1 to your computer using a USB data cable.
+3. Click **Install**. The page transmits the package directly over USB-MIDI and flashes the device.
+
+Web companion tools are also available:
+- **[Backup & Restore Tool](https://danimanx.github.io/ReplicantFM1/backup/)**: Save and restore full device projects.
+- **[Break Loop Uploader](https://danimanx.github.io/ReplicantFM1/breaks/)**: Upload custom breakbeat WAV loops.
+- **[Online Manual](https://danimanx.github.io/ReplicantFM1/manual/)**: Complete user manual and reference guide.
+
+### 2. Command Line Installer (Python)
+If you prefer flashing locally:
+```bash
+python3 tools/fm1_install.py ReplicantFM1-2.0.0.fwsc
+```
 
 ---
 
