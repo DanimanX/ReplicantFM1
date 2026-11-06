@@ -1,289 +1,203 @@
 # ReplicantFM1
 
-**Hard techno firmware for the M-VAVE FM-1.**
+**ReplicantFM1** turns the M-VAVE FM-1 into an acid, techno, and big-beat groovebox: an authentic **TR-909** drum machine, a modelled **Roland SH-101** monophonic synthesizer, dual **TB-303** acid basslines (303A & 303B) powered by the **TB-3PO** generative algorithm, and a real-time sliced **breakbeat player**, all performing simultaneously in stereo.
 
-[![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
-[![Hardware: M-VAVE FM-1](https://img.shields.io/badge/hardware-M--VAVE%20FM--1-black.svg)](https://www.m-vave.com/product?id=fm-1)
-[![Install: browser installer](https://img.shields.io/badge/install-browser%20installer-6cf260.svg)](https://danimanx.github.io/ReplicantFM1/)
+Each part can run its own independent step length (up to 64 steps), clock rate, and polymetric drift. You can arrange patterns into full songs, automate and record knob motions live or step-by-step (parameter locking), and give every single step probability and condition cycles. The mix runs through a shared stereo reverb, tape ping-pong delay, and a master bus featuring tube drive, resonant filter, and a sidechain **Master Pump** compressor driven by the 909 kick.
 
-**Install it from the browser:** <https://danimanx.github.io/ReplicantFM1/> — Chrome or Edge on a desktop, the
-FM-1 on a USB cable, back up first. The same site serves the [browser editor](https://danimanx.github.io/ReplicantFM1/webapp/editor/).
+Over USB, the FM-1 acts as a class-compliant MIDI controller/interface and a 24-bit stereo audio interface with no drivers required.
 
-ReplicantFM1 turns the FM-1 into a four-track hard techno instrument: a kick that carries on a phone speaker,
-drums and hi-hats, a driven bass and rumble, 303-style acid lines and offbeat stabs — with per-sound drive,
-glide and insert effects, on top of everything the FM-1 already does.
+![ReplicantFM1 Front Panel](docs/img/fm1-panel.svg)
 
-It is custom open-source firmware, a fork of [Felucca](https://github.com/hugelton/Felucca) 1.8.1 by Leo
-Kuroshita / Hügelton Instruments (GPL-3.0-only). The fork keeps Felucca's engines, sequencer, effects and
-browser editor intact and adds a sound bank, six patterns and a techno boot state. Nothing was removed, and no
-stored format changed: projects, presets, samples and MIDI setups made on Felucca load as they are.
+---
 
-## The synthesizer
+## Screen Gallery
 
-The FM-1 is a small desktop groovebox: four tracks, 16 keys plus function keys, four knobs, a 240×240
-screen and USB (MIDI in/out and class-compliant stereo audio). ReplicantFM1 gives it:
+| Home Overview | Roland SH-101 VCO |
+|---|---|
+| ![Home Screen](docs/img/screen-home.png) | ![SH-101 VCO](docs/img/screen-101.png) |
+| **Roland SH-101 VCF** | **Roland SH-101 Sequencer** |
+| ![SH-101 VCF](docs/img/screen-101-vcf.png) | ![SH-101 Sequencer](docs/img/screen-101-seq.png) |
+| **TR-909 Drum Grid** | **TB-303 Acid Bassline** |
+| ![TR-909](docs/img/screen-909.png) | ![TB-303](docs/img/screen-303.png) |
+| **TB-3PO Algorithmic Generator** | **Breakbeat Slicer** |
+| ![TB-3PO](docs/img/screen-tb3po.png) | ![Breakbeat](docs/img/screen-break.png) |
+| **Master Bus & Compressor Pump** | **Stereo Reverb & Tape Delay** |
+| ![Mixer & Master](docs/img/screen-mix.png) | ![FX](docs/img/screen-fx.png) |
 
-| | |
-| --- | --- |
-| **Tracks** | 3 synth tracks (8 voices shared) + 1 drum track (16 sounds, 6 voices) |
-| **Engines** | 13, including ANALOG (2 osc + noise + state-variable filter), FM6 (6-operator FM with DX7 patches), PHYS, GRAIN, SAMPLE, NOISE and the DRUM kit engine |
-| **Sequencer** | 64 steps per track, its own length and division each, swing, ties, slides, ratchets, per-step chance and parameter locks |
-| **Drums** | 16 sounds per kit, all synthesised in this firmware — kick, snare, clap, closed/open hats, tom, rim, cymbal, bell |
-| **Effects** | per-track DIST / CHORUS / DELAY / REVERB sends and an INSERT (drive, fold, fuzz, crush, phaser, flanger, chorus); 27 punch-in FX on the keys; master limiter |
-| **Performance** | song sections A–D with a quick chain, fills, live mutes, arpeggiator, chord keys, visualiser |
-| **Audio** | 44.1 kHz, USB audio out (record straight into a DAW or a phone) |
+---
 
-### The hard techno sound bank
+## What's Inside
 
-Everything below is new in this fork and sits alongside Felucca's own 153 sounds.
+| Part | Description | Engine Details |
+|---|---|---|
+| **TR-909** | 11 drum voices: modelled analog kick, snare, toms (low/mid/high), rimshot, and clap, with 6-bit sampled hats, crash, and ride. | Based on [9W9](https://github.com/athousanddetails/schwung-9W9) (samples from ER-99). |
+| **Roland SH-101** | Full analog monophonic synthesizer: CEM3340 VCO (Saw, Pulse/PWM, Sub-osc, Noise), IR3109 4-pole ZDF low-pass resonant filter, snappy ADSR envelope, multi-waveform LFO, VCA ENV/GATE switch, portamento glide, accent, overdrive, and stereo pan. | Custom DSP implementation for ReplicantFM1. |
+| **TB-303 A & B** | Two independent Open303 engines with Devilfish extensions, each with its own sound and pattern, supported by the TB-3PO generative line algorithm. | Based on [schwung-303](https://github.com/charlesvestal/schwung-303) & [schwung-tb3po](https://github.com/charlesvestal/schwung-tb3po). |
+| **Breakbeat Player** | Real-time 8-slice loop slicer and rearranger with pitch shifting, resonant multimode filtering, retriggers, fills, and reverse playback. | Based on [BB Gen](https://github.com/mestela/schwung-breakbeat). |
+| **Master FX & Bus** | Stereo algorithmic reverb, tempo-synced ping-pong tape delay with saturation, master overdrive, resonant filter, and Master Pump sidechain compressor. | luchak reverb, 12-bit/tape delay, and custom pump compressor. |
 
-**Drums — two kits** (`KIT` on the drum track, after `PERC`):
+---
 
-- **`HARD`** — an F#1 kick (46 Hz) that starts about 18 semitones up, holds 7 ms and drops in 20 ms with a
-  2 kHz click, ×1.7 into the voice's soft clip; a bright 185 Hz snare; a dry 4-tooth clap; 10 ms closed and
-  73 ms open hats; a 96 Hz tom; a 1.2 kHz rimshot; a metal cymbal.
-- **`INDUS`** — lower and longer: a 44 Hz kick with more drive, a ringing snare, a 6-tooth gated clap, noisier
-  hats, a lower tom, a clave-like rim, a wider metal bell.
+## Roland SH-101 Synthesizer Engine
 
-Both are synthesised — no sample slots are used, so your own samples (USR1–USR4) stay free. Lane levels match
-Felucca's own kit within ±1.5 dB, so swapping kits keeps the mix.
+The Roland SH-101 implementation in ReplicantFM1 recreates the architecture and sound of the classic 1982 analog monosynth:
 
-**Synths — seven `ANALOG` presets:**
+- **CEM3340 Voltage Controlled Oscillator (VCO)**:
+  - Selectable Octave range: `16'`, `8'`, `4'`, `2'`.
+  - Simultaneous mixing of Sawtooth, Pulse / PWM, Sub-oscillator, and Noise.
+  - Sub-Oscillator types: `-1 Octave Square`, `-2 Octaves Square`, `-2 Octaves Narrow Pulse`.
+  - Pulse Width (PW) adjustable manually (50% square down to narrow pulse) or modulated via PWM.
+  - PWM Modulation sources: Manual (`MAN`), LFO (`LFO`), or Envelope (`ENV`), with variable PWM Amount.
+  - White / pink analog noise generator.
+- **IR3109 4-Pole (24 dB/oct) Low-Pass Resonant Filter (VCF)**:
+  - Zero-Delay Feedback (ZDF) ladder topology with non-linear saturation.
+  - Full self-oscillation into a pure sine wave at high resonance settings.
+  - Envelope Modulation (`ENVMOD`) with fast bipolar impact on cutoff.
+  - Keyboard Pitch Tracking (`KYBD`) adjustable from 0% to 100%.
+  - Dedicated LFO filter modulation depth (`VCF MOD`).
+- **Snappy Roland ADSR Envelope**:
+  - Analog-modeled exponential Attack, Decay, Sustain, and Release curves.
+- **Low Frequency Oscillator (LFO)**:
+  - Continuous rate control from sub-audio clicks to rapid modulation.
+  - 4 selectable waveforms: Triangle (`TRI`), Square (`SQR`), Random Sample & Hold (`RND`), and Noise (`NOI`).
+- **Amplifier (VCA) & Performance**:
+  - VCA Mode switch: `ENV` (shaped by the ADSR envelope) or `GATE` (instant organ gate on key presses).
+  - Portamento Glide: Adjustable glide rate, with Glide Mode set to `AUTO` (legato slide on overlapping notes), `ON` (glide every note), or `OFF`.
+  - Accent: High-velocity or sequenced accents boost filter cutoff and amplifier punch.
+  - Overdrive: Dedicated analog tube-style drive on the synth voice output.
+  - Fine tuning (±100 cents) and stereo pan position.
+- **Sequencer Integration**:
+  - 64-step piano roll with note pitch, gate, slide, and accent locks.
+  - Real-time keyboard recording across all 27 keys (`REC`).
+  - Algorithmic generation via **TB-3PO** (`ARP`).
 
-| Preset | What it is |
-| --- | --- |
-| `HT BASS` | driven saw bass, dark filter, `HARD` insert, drive send up — sits under the kick |
-| `HT RUMBLE` | SUB wave (OSC 2 an octave down), no resonance: the low end under the kick |
-| `HT SUB` | a bare sine for the very bottom of the mix |
-| `ACID HT` | the 303: saw, resonance 124, a short decay to nothing, filter envelope, long glide |
-| `ACID 2` | the same on a square, brighter and meaner |
-| `HT STAB` | two detuned saws, resonant, short, polyphonic: the offbeat stab |
-| `HT SCREAM` | WAVE SYNC, OSC 2 an octave above, long glide: the screaming lead |
+---
 
-Each one carries its own `GLIDE` and `INSERT` (from `firmware/src/ht_flavor.c`), so a preset load restores the
-whole sound and not just the knobs.
+## Hardware Dual-Core Distribution
 
-**Patterns** (`SEQ` → `PATTERNS`): `HT KICK` (four to the floor with an offbeat open hat and a rim), `HT ACID`
-(a 303 line with slides), `HT BASS` (offbeat rumble), `HT STAB` (offbeat chords), `HT ROLL` (snare, rim and tom
-rolls into the kick).
+ReplicantFM1 utilizes both processor cores of the JieLi AC79 series chip to achieve dropout-free audio at 44.1 kHz:
 
-### It boots as a set
+```mermaid
+graph TD
+    subgraph Core 1 - Primary Engine & Master
+        TR909["TR-909 Drum Engine (11 voices)"]
+        TB303A["TB-303 Synthesizer A"]
+        TB303B["TB-303 Synthesizer B"]
+        FX["Stereo Delay & Reverb"]
+        MASTER["Master Bus, Pump Compressor & Filter"]
+        MIX["Main Mixer & DAC Output"]
+    end
 
-| Track | Sound | Role |
-| --- | --- | --- |
-| T1 | `HT BASS` | bass |
-| T2 | `BELL` (FM6) | metallic stab, fast enough to open on a 1/16 |
-| T3 | `ACID HT` | acid line |
-| T4 | `HARD KIT` | drums |
+    subgraph Core 2 - Secondary Engine
+        SH101["Roland SH-101 Synthesizer"]
+        BREAKS["Breakbeat Player (8 Slices)"]
+    end
 
-150 BPM, straight, delay and room at techno settings. The sequencers start **empty**, exactly as Felucca ships:
-press `PLAY` and nothing sounds until you load patterns, so the first thing you hear is what you played.
-
-### The look
-
-It also boots in `VIRUS`, the fork's own palette: a near-black green ground, phosphor green for values, curves and
-selections, acid lime for the one active thing. It is appended as the eleventh palette, so every saved palette id
-still opens the same palette it did on Felucca; `MENU` → `DISPLAY` → `COLOR` (or the editor) picks any of the
-eleven. The power-on splash is drawn in the same five colours: a virus particle with an acid nucleus, the name and
-version above it, `hard techno FM-1` and the lineage below.
-
-## The panel in pictures
-
-These are captures of the firmware's own drawing code, rendered by the test suite at 240×240 and doubled here
-(`docs/screens/`, the default `VIRUS` palette). Nothing is a mock-up.
-
-<table>
-<tr>
-<td align="center"><img src="docs/screens/splash.png" width="240"><br><sub><b>Power-on.</b> The splash, version <code>v1.8.1-ht1</code>.</sub></td>
-<td align="center"><img src="docs/screens/home-tracks.png" width="240"><br><sub><b>HOME → TRACKS.</b> The four boot sounds; the knobs show the selected track.</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/screens/presets.png" width="240"><br><sub><b>PRESETS.</b> The bank, with the new <code>HT BASS</code>, <code>HT RUMBLE</code>, <code>ACID HT</code>, <code>ACID 2</code>.</sub></td>
-<td align="center"><img src="docs/screens/drum-grid.png" width="240"><br><sub><b>DRUMS.</b> The 8 lanes of <code>HARD KIT</code>; <code>STEP</code> / <code>LANE</code> / <code>HIT</code> / <code>ACC</code> on the knobs.</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/screens/step-303.png" width="240"><br><sub><b>STEP.</b> A bass line as a piano roll, one note and its flag per step.</sub></td>
-<td align="center"><img src="docs/screens/patterns.png" width="240"><br><sub><b>PATTERNS.</b> Where the six new <code>HT …</code> patterns load from.</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/screens/mixer.png" width="240"><br><sub><b>MIXER.</b> Level, pan and reverb send per track — the balance of the set.</sub></td>
-<td align="center"><img src="docs/screens/menu.png" width="240"><br><sub><b>MENU.</b> Display, audio, MIDI and system settings.</sub></td>
-</tr>
-<tr>
-<td align="center" colspan="2"><img src="docs/screens/edit-engine.png" width="240"><br><sub><b>EDIT layer.</b> Held <kbd>EDIT</kbd>: engine per key, <code>INIT</code> / <code>CLEAN</code>, and the drum lanes' mutes (<code>BD SD CP CH OH TM RS CB</code>).</sub></td>
-</tr>
-</table>
-
-## How to use it
-
-The FM-1 is played live: **hold a button and the keys and the four knobs change job**. The screen always says
-what a key or knob does right now. Tap a button instead of holding it and its pages open.
-
-### Get the set going (60 seconds)
-
-1. Press **`SEQ`**, then the **`PATTERNS`** page (`AT` / `LOAD`). Load `HT KICK` onto the drum track — T4.
-2. `OCT−` back, `1`–`4` select the track, and load `HT BASS` on T1, `HT STAB` on T2, `HT ACID` on T3.
-3. Press **`PLAY`**. Everything runs in sync from one clock.
-4. Swap `HT ROLL` onto the drums for a fill, then `HT KICK` back.
-
-### The four tracks
-
-- **Knobs on HOME** are the selected track's four main parameters (for `ACID HT`: cutoff, resonance, attack,
-   release). Hold a layer button and the knobs switch to that layer's parameters.
-- **`EDIT`** held gives the sound's own pages (engine, oscillator, filter, envelope, insert, modulation).
-- **`SEQ`** held gives the step editor: notes, velocity, length, ratchets, chance, slides, and per-step
-  parameter locks.
-- **`MIXER`** gives level, pan, reverb/delay sends and mute per track.
-- **`FX`** held turns the keys into 27 punch-in effects (filter kill, rewind, flanger, freeze, and more).
-
-### Acid
-
-Load `ACID HT` on T3, then hold **`SEQ`** and write a line with slides (`SLIDE` on a step glides into the next
-note — the preset's glide time makes it a 303). Turn **CUT** and **RES** live with the knobs; `EDIT` → `ENV
-DEST` sets how far the envelope sweeps the filter. `ACID 2` is the same voice on a square, and `HT SCREAM` is
-the sync-sweep lead for the build-ups.
-
-### Drums
-
-The drum track maps its 8 lanes to the keyboard (`BD SD CP CH OH TM RS CB`). Hold **`EDIT`** to mute lanes live;
-the grid page writes patterns step by step (`STEP`, `LANE`, `HIT`, `ACC`), and `EDIT` → `KIT` / `TUNE` /
-`TONE` / `DECY` / `SNAP` / `DRV` reshape the whole kit at once. `DRV` is the whole kit's drive — on `INDUS`
-it is already open.
-
-### Sequencing, song and saving
-
-- Each track has its own length (1–64 steps), division and swing: polymeter and polyrhythm come for free.
-- Song sections A–D (`SAVE` layer) chain patterns; hold `SAVE` and tap a section sequence to chain them live.
-- `SAVE` held also **undoes** the last sound or pattern load.
-- Save with `SAVE` → `PROJECT`; the FM-1 keeps one song in RAM plus project slots, and the browser editor can
-  back up everything as one file.
-
-### MIDI and audio
-
-USB MIDI in/out and TRS MIDI in on the 3.5 mm jack (adapter), with MIDI clock in and out; the sequencer can be
-sent to MIDI out to drive another synth. The FM-1 is also a USB audio interface: record the master output
-straight into a DAW or a phone.
-
-## How to load the firmware
-
-The package is **`ReplicantFM1-1.8.1-ht1.fwsc`** in the root of this repository (also produced by the build as
-`build/felucca.fwsc`). Flashing custom firmware is at your own risk; a cut-off update is recoverable with USB
-RESCUE (hold `OCT−` at power-on) and the same installer.
-
-**0. Back up the FM-1 first.** Open the browser editor, connect the device and use its backup page: it saves
-projects, presets, user samples and settings in one file. An update keeps the sound data, but a backup is what
-saves you if an experiment goes wrong.
-
-**1. Connect the FM-1 by USB.** It shows up as a MIDI device (and an audio interface). The running firmware
-only needs to speak its update protocol, which both installers handle.
-
-**2a. Command line (Linux/macOS/Windows):**
-
-```sh
-pip install mido python-rtmidi
-python3 tools/fm1_install.py ReplicantFM1-1.8.1-ht1.fwsc
+    SH101 -->|Inter-Core Audio Buffer| MIX
+    BREAKS -->|Inter-Core Audio Buffer| MIX
+    TR909 --> MIX
+    TB303A --> MIX
+    TB303B --> MIX
+    MIX --> FX --> MASTER
 ```
 
-The installer answers the device's own read requests, hands over the update loader, writes the package,
-restarts the FM-1 and checks the installed identity. It exits non-zero on a missing device (`3`), a lost
-connection (`4`) or a timeout (`5`) rather than leaving you guessing; `--info` lists what it sees without
-writing anything.
+This load balancing maintains CPU consumption under 70% per core even during heavy 64-step polymetric patterns with full effects and compressor pump active.
 
-**2b. Browser installer (Chrome or Edge on a desktop) — the easy way:**
+---
 
-Open **<https://danimanx.github.io/ReplicantFM1/>** and press *Install*. Nothing to download, nothing to run
-locally: the page speaks USB-MIDI to the FM-1 itself, and the package it writes is byte for byte this
-repository's `ReplicantFM1-1.8.1-ht1.fwsc` (610286 B, identity `FM-1_900`). The
-[editor](https://danimanx.github.io/ReplicantFM1/webapp/editor/) lives on the same site.
+## MIDI Implementation
 
-To serve that site yourself from a checkout instead (offline, or a modified build):
+ReplicantFM1 responds to external MIDI over USB and TRS MIDI IN:
 
-```sh
-python3 web/make_site.py ReplicantFM1-1.8.1-ht1.fwsc 1.8.1-ht1 out-site
-python3 -m http.server -d out-site 8000
+| MIDI Channel | Instrument / Destination | Behavior |
+|---|---|---|
+| **Channel 1** | **Roland SH-101** | Melodic notes. Velocity &ge; 100 triggers accent. Overlapping notes trigger legato slide. |
+| **Channel 2** | **TB-303 A** | Melodic notes. Velocity &ge; 100 triggers accent. Overlapping notes trigger legato slide. |
+| **Channel 3** | **TB-303 B** | Melodic notes. Velocity &ge; 100 triggers accent. Overlapping notes trigger legato slide. |
+| **Channel 4** | **Breakbeat Player** | Notes 36–43 fire slices 1–8. |
+| **Channel 10** | **TR-909 Drums** | General MIDI drum notes: 36 BD, 38 SD, 41 LT, 45 MT, 50 HT, 37 RS, 39 CP, 42 CH, 46 OH, 49 CR, 51 RD. |
+
+### Roland SH-101 MIDI CC Map (Channel 1)
+
+| CC | Parameter | CC | Parameter |
+|---|---|---|---|
+| **74** | VCF Cutoff | **85** | VCO Octave |
+| **71** | VCF Resonance | **86** | PWM Source (MAN / LFO / ENV) |
+| **77** | VCF Env Mod | **87** | Pulse Width (PW) |
+| **90** | Keyboard Tracking (KYBD) | **88** | PWM Amount |
+| **14** | VCF LFO Mod | **15** | VCA Mode (ENV / GATE) |
+| **81** | Saw Level | **76** | LFO Rate |
+| **80** | Pulse Level | **28** | LFO Wave (TRI / SQR / RND / NOI) |
+| **82** | Sub-Osc Level | **5** | Glide / Portamento Time |
+| **84** | Sub-Osc Type | **65** | Glide Mode (AUTO / ON / OFF) |
+| **83** | Noise Level | **29** | Accent Depth |
+| **73** | Envelope Attack | **78** | Overdrive |
+| **75** | Envelope Decay | **31** | Voice Volume |
+| **79** | Envelope Sustain | **30** | Master Tune |
+| **72** | Envelope Release | **10** | Stereo Pan |
+| **7** | Channel Level | **91 / 93** | Reverb Send / Delay Send |
+
+### Master Bus & FX MIDI CC Map (Mix Channel)
+
+| CC | Destination |
+|---|---|
+| **16** | Master Drive |
+| **17** | Master Compressor (Threshold / Ratio) |
+| **18** | Master Sidechain Pump Depth |
+| **19** | Master Filter Cutoff (Low-pass &larr; Center Off &rarr; High-pass) |
+| **71** | Master Filter Resonance |
+| **20 / 21** | Reverb Decay / Tone |
+| **22–25** | Delay Time / Feedback / Tone / Tape Saturation |
+| **102–106** | Part Volumes: 909, 101, 303A, 303B, Break |
+
+---
+
+## Front Panel Keymap
+
+![Front Panel Keymap](docs/img/fm1-keys.svg)
+
+- **White Keys (1–16)**: Sequencer step triggers (1–16, 17–32, 33–48, 49–64 via `OCT-`/`OCT+`). On `HOME`, selects Patterns 1–16. On synths (`REC` active), functions as keyboard piano keys.
+- **Black Keys (1–11)**: TR-909 voice selection (`BD` to `RD`). On `BREAK`, triggers slices 1–8. On `HOME`, toggles Part Mutes. On synths (`REC` active), functions as sharp/flat piano keys.
+
+---
+
+## Building and Verification
+
+ReplicantFM1 includes a comprehensive offline test harness and simulator (`host/x0x_host`) verifying DSP math, sequencer logic, MIDI parsing, and flash persistence:
+
+```bash
+# Run the complete test suite and scenario regressions
+tests/run_tests.sh
+
+# Build the device firmware package (requires JieLi toolchain and AC79 SDK)
+./build.sh
 ```
 
-Then open <http://localhost:8000/webapp/installer/> and press *Install*. `web/make_site.py` also emits the full
-browser editor next to it, so the same page can back up the device, edit sounds and sequences and send them
-back.
+### Build Artifacts
+- `build/x0x.bin`: Binary application image for the FM-1.
+- `build/x0x.fwsc`: Encrypted update package compatible with the web installer and bootloader.
 
-**3. Check it took.** The splash on power-on reads `Replicant`, and `MENU` → `ABOUT` shows `v1.8.1-ht1`.
+---
 
-**Going back.** Use M-VAVE's **M-UPGRADE** with the official V16 image (or Felucca's own package) the same way;
-the update replaces the app and leaves projects, presets and samples alone.
+## Installing Firmware
 
-## Build from source
+1. Connect the M-VAVE FM-1 to your computer using a USB-C data cable.
+2. Open the web installer: `web/x0x_installer.html` in Chrome, Edge, or Opera (WebUSB enabled).
+3. Select your device and choose `build/x0x.fwsc`.
+4. Click **Install**. The FM-1 will flash the image and restart into ReplicantFM1.
 
-Needs the JieLi `pi32v2` toolchain, three files from the JieLi AC79 SDK, and Python with Pillow and fontTools:
+---
 
-```sh
-tools/get_toolchain.sh                       # downloads the toolchain to ~/.jieli (~25 MB)
-git clone --depth 1 --branch AC79NN_SDK_V1.2.1_2023-12-13 \
-    https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git ~/fw-AC79_AIoT_SDK
-./build.sh                                   # -> build/felucca.bin, build/loader/ota.bin, build/felucca.fwsc
-```
+## Credits & Licensing
 
-The tree carries `firmware/engines` (Felucca-Engines, MIT) and `firmware/bsp` (felucca-bsp, MPL-2.0) vendored at
-the pinned commits, so no submodule step is needed. More detail in [BUILDING.md](BUILDING.md).
+- **ReplicantFM1**: GPL-3.0-only.
+- **Roland SH-101 Engine**: Custom physical-modelling DSP engine (CEM3340 VCO + IR3109 4-pole ZDF VCF).
+- **TR-909 Drum Engine**: Ported from [9W9](https://github.com/athousanddetails/schwung-9W9) by athousanddetails (ER-99 samples by Matthew Cieplak, GPL-3.0).
+- **Open303**: Robin Schmidt (MIT licence) with devilfish extensions from schwung-303.
+- **TB-3PO**: Generative line generator from [schwung-tb3po](https://github.com/charlesvestal/schwung-tb3po).
+- **Breakbeat Engine**: Ported from BB Gen by mestela.
+- **Platform & Hardware Abstraction**: Derived from [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (Hügelton Instruments).
+- **Dual-Core Boot Architecture**: Based on research by [Melodee](https://github.com/keremimo/melodee) (keremimo) and [Jangada](https://github.com/zednaked/jangada) (zednaked).
+- **Fonts**: Barlow Semi Condensed and Terminus (SIL Open Font License 1.1).
 
-Tests run on the host, no hardware needed:
-
-```sh
-AC79_SDK=~/fw-AC79_AIoT_SDK JIELI_TOOLCHAIN=~/.jieli/toolchain sh tests/run_tests.sh
-```
-
-They cover the engines against golden renders, the sequencer timing, the drum voices against measured
-targets, the UI layout (every screen in every palette), flash storage, MIDI, USB audio, the installer protocol
-and the browser editor. The suite ends with `ALL HOST TESTS PASSED`.
-
-### Listen without hardware
-
-`ht-tools/` renders and measures sounds through the same DSP sources the firmware uses:
-
-```sh
-./ht-tools/preview.sh out.wav          # the boot set, 8 bars at 150 BPM (SOLO=1..4 for one track)
-./ht-tools/hostsim.sh                  # the renderer the analysis tools drive
-python3 ht-tools/analyze.py 10 4 --steps 36,0,0,0,0,0,0,0,0   # peak, RMS, decay, band split
-python3 ht-tools/plot.py 10 4 /tmp/kick.png --steps 36,0,0,0,0,0,0,0   # spectrogram + waveform
-```
-
-## Re-voice it
-
-- **Kits:** `firmware/src/drum_voice.c`, the last two rows of `DV_KIT` (the `HARD` and `INDUS` entries). Each
-  lane is Felucca's drum voice with its own numbers, and the comment above the table explains every value.
-  `tests/drum_test.c` holds the measured targets; `KTGT=1 build/drum_test` prints fresh ones after a change.
-- **Synth presets:** `firmware/engines/src/eng_analog.c`, `ANALOG_PRESETS[]` (the seven at the end), plus
-  `firmware/src/ht_flavor.c` for their glide and insert, and the `ANALOG` table in `web/editor.html` so the
-  browser editor agrees.
-- **Patterns and boot sounds:** `firmware/src/engines.c` (`PATTERNS[]`, `TRK_DEF`); boot tempo in
-  `firmware/src/main.c`.
-- After an intended change of the sound, `GOLDEN_UPDATE=1 sh tests/run_tests.sh` rewrites the golden renders —
-  review the diff, it should be the rows you meant to move.
-
-## What this fork changes
-
-All additive:
-
-- `firmware/src/drum_voice.c`, `firmware/src/eng_drum.c`: kits `HARD` (12) and `INDUS` (13), presets `HARD KIT`
-  and `INDUS KIT`.
-- `firmware/engines/src/eng_analog.c`: seven presets after `STRINGS`.
-- `firmware/src/ht_flavor.c` (new): per-preset `GLIDE` and `INSERT`, applied by `ui.c apply_preset_to`.
-- `firmware/src/engines.c`: six patterns and the boot `TRK_DEF`.
-- `firmware/src/main.c`: boot tempo 150 (parameter defaults and every FX bus stay Felucca's).
-- `firmware/src/category.c`, `web/editor.html`, `web/test_web.mjs`: the new sounds in the PRESETS categories and
-  in the browser editor.
-- Branding: the splash, `MENU` → `ABOUT`, and the version string.
-- Tests: content assertions and the song / golden baselines moved with the new bank, each one saying why.
-- `docs/screens/`: the captures above, regenerated by `tests/ui_render.c` + `tests/ui_render.py`.
-
-## Credits and licence
-
-- **Felucca** by Leo Kuroshita ([@kurogedelic](https://github.com/kurogedelic)) / Hügelton Instruments — the
-  engines, the sequencer, the UI, the editor, the installer, and the drum voice these kits are built on.
-  GPL-3.0-only.
-- **Felucca-Engines** (MIT), **felucca-bsp** (MPL-2.0) and, inside the package, JieLi AC79 SDK files
-  (Apache-2.0): see [LICENSING.md](LICENSING.md) and [LICENSES/](LICENSES/).
-- The ReplicantFM1 fork is GPL-3.0-only, like the project it comes from.
-
-M-VAVE and FM-1 are trademarks of their respective owners. This is an independent fork, not affiliated with,
-endorsed by or supported by M-VAVE or by the Felucca maintainer: report its bugs here, not upstream.
+*TR-909, SH-101, and TB-303 are trademarks of Roland Corporation. M-VAVE and FM-1 are trademarks of their respective owners. ReplicantFM1 is an independent open-source project and is not affiliated with or endorsed by Roland or M-VAVE.*

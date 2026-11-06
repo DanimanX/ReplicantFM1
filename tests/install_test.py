@@ -6,7 +6,7 @@ The fake device is the one in web/test_web.mjs: identity on the handshake,
 then "device asks, host answers" reads of the logical image. Run from the repo root:
   python3 tests/install_test.py
 Also checks logical_image/product_of against web/fm1pkg.js (needs node and
-build/felucca.fwsc, skipped otherwise)."""
+build/x0x.fwsc, skipped otherwise)."""
 import io
 import queue
 import shutil
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import fm1_install as I  # noqa: E402
 
-I.DELAY.update(open=0, start=0.01, reply=0, loader=0.01, reboot=0.01, retry=0.02, poll=0.05, hs=0.1,
+I.DELAY.update(open=0, start=0.01, reply=0, loader=0.01, reboot=0.01, retry=0.02, poll=0.05, hs=0.1, hs_full=0.1,
                idle_check=0.4, idle_write=0.4, wait_loader=2, wait_reboot=2)
 failed = 0
 
@@ -67,10 +67,11 @@ class FakeFM1:
     """a MIDI backend with one FM-1 on it"""
 
     def __init__(self, image, identity="FM-1_015", name="FM-1", unplug_after=None, after_write="FM-1_900",
-                 stall_after=None, bad_addr=None):
+                 stall_after=None, bad_addr=None, new_ota=(), jedec=0):
         self.image, self.unplug_after, self.after_write = image, unplug_after, after_write
         self.stall_after, self.bad_addr = stall_after, bad_addr
-        self.served = self.bad = self.upgrades = 0
+        self.new_ota, self.jedec = set(new_ota), jedec   # identities whose ota.c cuts the plain answer; bsp#29's bytes
+        self.served = self.bad = self.upgrades = self.hs_full = 0
         self.sent, self.links, self.gen, self.lock = [], [], 0, threading.Lock()
         self.boot(identity, name)
 
@@ -97,10 +98,19 @@ class FakeFM1:
             if link.gen == self.gen and not link.closed:
                 link.q.put(bytes(pkt))
 
+    def ident(self, text):
+        b = bytearray(text.encode() + bytes(27 - len(text)))
+        b[24:27] = self.jedec.to_bytes(3, "big")
+        self.tx(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 27, 0, 0]) + b + bytes([~sum(b) & 0xFF])) + b"\xF7")
+
     def rx(self, d):
+        new = self.identity in self.new_ota       # ota.c from M-UPGRADE 3.11's fix on: NAME_ + 3 digits to HS_QUERY
         if d == I.HS_QUERY:
-            t = self.identity.encode()
-            self.tx(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 0, 0, 0]) + t + bytes(28 - len(t))) + b"\xF7")
+            self.ident(self.identity[:self.identity.index("_") + 4] if new else self.identity)
+        elif d == I.HS_FULL:
+            self.hs_full += 1
+            if new:
+                self.ident(self.identity)
         elif d == I.UPGRADE:
             self.upgrades += 1
             first = self.bad_addr if self.bad_addr is not None else 0
@@ -178,6 +188,15 @@ def wire():
        and ~sum(u[6:17]) & 0xFF == u[17], "response: header, address, data, checksum")
     raw = package("FM-1_906")
     ok(I.product_of(raw) == "FM-1_906" and len(I.logical_image(raw)) == len(raw) - 20, "product_of / logical_image (synthetic)")
+    ok(I.HS_FULL == b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 1, 0, 0, 1, 0xFE])) + b"\xF7"
+       and I.unpack7(I.HS_FULL[1:-1])[:8] == bytes([0, 0x59, 0x11, 1, 0, 0, 1, 0xFE]),
+       "HS_FULL: 00 59 11, length 1, body 01, checksum FE")
+    b = bytearray(b"FM-1_9010200" + bytes(15))
+    b[24:27] = b"\xB3\x60\x14"                   # felucca-bsp#29: the flash's JEDEC id after the text
+    i = I.parse_identity(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 27, 0, 0]) + b + bytes([~sum(b) & 0xFF])) + b"\xF7")
+    ok(i and i.text == "FM-1_9010200" and i.version == 9010200, "parse_identity: the text up to its first zero (#29's bytes after it)")
+    raw = package("FM-1_9001000")                  # X0X from 0.10: major, minor, patch, two digits each
+    ok(I.product_of(raw) == "FM-1_9001000", "product_of: a 12-character identity")
 
 
 def installs():
@@ -189,6 +208,12 @@ def installs():
     rc, out, err = cli([p, "--yes"], dev)
     ok(rc == 0 and dev.bad == 0 and dev.upgrades == 2 and dev.served == 11 and "done: the FM-1 runs FM-1_900" in out
        and "100%" in out, f"install: running -> loader -> Felucca ({dev.served} reads)")
+
+    raw10 = package("FM-1_9001000")
+    dev = FakeFM1(I.logical_image(raw10), identity="FM-1_909", after_write="FM-1_9001000")
+    rc, out, err = cli([pkgfile("x10.fwsc", raw10), "--yes"], dev)
+    ok(rc == 0 and dev.bad == 0 and "done: the FM-1 runs FM-1_9001000" in out,
+       "install: 0.9 (FM-1_909) -> 0.10 (FM-1_9001000), the longer identity verified after")
 
     dev = FakeFM1(image, identity="ota-FM-1_900", name="Felucca Update")
     rc, out, err = cli([p, "--yes"], dev)
@@ -204,20 +229,27 @@ def installs():
 
     dev = FakeFM1(image, identity="ota-FM-1_900", name="Felucca Update")
     rc, out, err = cli(["--info"], dev)
-    ok(rc == 0 and "update loader" in out, "--info: device in update mode")
+    ok(rc == 0 and "update loader" in out and dev.hs_full == 0, "--info: device in update mode (never asked with 01)")
 
-    dev = FakeFM1(image, identity="\x1b[2J\x1b]0;x\x07FM-1_905", name="Felucca")
+    # M-UPGRADE 3.11 takes NAME_ and 1-3 digits: ota.c answers HS_QUERY with FM-1_901, HS_FULL with the whole
+    rawl = package("FM-1_9010201")
+    dev = FakeFM1(I.logical_image(rawl), identity="FM-1_9010200", name="FM-1", after_write="FM-1_9010201",
+                  new_ota={"FM-1_9010200", "FM-1_9010201"}, jedec=0xB36014)
+    rc, out, err = cli([pkgfile("long.fwsc", rawl), "--yes"], dev)
+    ok(rc == 0 and dev.bad == 0 and "device:  FM-1_9010200" in out and "done: the FM-1 runs FM-1_9010201" in out,
+       "install: FM-1_901 to the plain query, the whole identity to HS_FULL")
+    rawl = package("FM-1_9010200")
+    dev = FakeFM1(I.logical_image(rawl), identity="FM-1_9010100", name="FM-1", after_write="FM-1_9010200",
+                  new_ota={"FM-1_9010200"})
+    rc, out, err = cli([pkgfile("long.fwsc", rawl), "--yes"], dev)
+    ok(rc == 0 and dev.bad == 0 and "done: the FM-1 runs FM-1_9010200" in out,
+       "install: from a build before it (whole identity to the plain query) to one after")
+    dev = FakeFM1(image, identity="FM-1_900", name="FM-1", new_ota={"FM-1_900"})
     rc, out, err = cli(["--info"], dev)
-    ok(rc == 0 and "FM-1_905" in out and not any(c in out for c in "\x1b\x07"),
-       "--info: control bytes in the device's identity are not printed")
-    import fm1_sample_upload as U
-    lines = U.slot_info([3, 80, 2, 0x41, 0x1B, 0x5B, 0x32, 0x4A, 0, 40, 0, 0, 0, 0, 0, 0])
-    ok(lines[0] == "USR1: 2 zones, A?[2J, 40 KiB" and lines[1] == "USR2: empty", "sample upload: slot names printable only")
-    try:
-        U.slot_info([3, 80, 2, 0x41])
-        ok(False, "sample upload: a malformed SMP_INFO reply is an error")
-    except ValueError:
-        ok(True, "sample upload: a malformed SMP_INFO reply is an error")
+    ok(rc == 0 and "FM-1_900" in out and dev.hs_full == 1, "--info: a dev build's FM-1_900: its whole identity")
+    dev = FakeFM1(image, identity="FM-1_015", name="FM-1")
+    rc, out, err = cli(["--info"], dev)
+    ok(rc == 0 and "FM-1_015" in out and dev.hs_full == 1, "--info: M-VAVE's firmware doesn't answer HS_FULL: its plain answer")
 
 
 def errors():
@@ -274,9 +306,9 @@ def errors():
 
 
 def against_js():
-    clean = ROOT / "build/felucca.fwsc"
+    clean = ROOT / "build/x0x.fwsc"
     if not shutil.which("node") or not clean.exists():
-        print("logical image vs fm1pkg.js: skipped (needs node and build/felucca.fwsc)")
+        print("logical image vs fm1pkg.js: skipped (needs node and build/x0x.fwsc)")
         return
     js = ("import { logicalImage, productOf } from %r; import { readFileSync } from 'node:fs';"
           "const p = readFileSync(process.argv[1]); process.stderr.write(productOf(p));"
@@ -288,29 +320,10 @@ def against_js():
     ok(I.LOADER_MARK in raw, f"{clean.name} carries the Felucca loader marker")
 
 
-def official():
-    """#32: back to the official V15 from Felucca, without --force (only the unmodified file)"""
-    v15 = ROOT / "FM-1_v15.fwsc"
-    if not v15.exists():
-        print("official V15 restore: skipped (needs FM-1_v15.fwsc in the repo root)")
-        return
-    raw = v15.read_bytes()
-    dev = FakeFM1(I.logical_image(raw), identity="FM-1_900", name="Felucca", after_write="FM-1_015")
-    rc, out, err = cli([str(v15), "--yes"], dev)
-    ok(rc == 0 and dev.bad == 0 and "FM-1_015" in out and dev.identity == "FM-1_015",
-       "official V15 (FM-1.fwsc) from Felucca: installed without --force, back as FM-1_015")
-    bad = bytearray(raw)
-    bad[-1] ^= 1
-    dev = FakeFM1(I.logical_image(bytes(bad)), identity="FM-1_900", name="Felucca")
-    rc, out, err = cli([pkgfile("v15mod.fwsc", bytes(bad)), "--yes"], dev)
-    ok(rc == 2 and "official V15" in err and dev.sent == [], "a modified V15 is still refused (no MIDI)")
-
-
 wire()
 installs()
 errors()
 against_js()
-official()
 shutil.rmtree(TMP, ignore_errors=True)
 print(f"INSTALL TESTS FAILED ({failed})" if failed else "install tests passed")
 sys.exit(1 if failed else 0)

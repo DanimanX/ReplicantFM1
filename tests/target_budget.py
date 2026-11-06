@@ -14,33 +14,10 @@ import os
 import re
 import sys
 
-FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_render_custom", "phase_render", "phase_render_f", "lofi_render", "sample_render", "formant_render",
-         "trio_render", "trio_pass", "wheel_render", "wheel_block",
-         "grain_render", "grain_block", "phys_render", "drum_render", "noise_render", "fm6_render", "fm6_op_run", "fm6_op_fb", "px_modal_block", "px_modal_run", "px_memb_block",
-         "px_string_excite", "px_string_run", "px_symp_run",
-         "dv_metal_run", "dv_kick_run", "dv_snare_run", "dv_clap_run", "dv_hat_run", "dv_tom_run",   # drum_voice.c
-         "dv_rim_run", "dv_bell_run", "dv_cym_run", "dv_out", "dv_metal_mix",
-         "slicer_track",
-         "slice_render", "slc_rev",                          # SLICE (eng_slice.c): the render, the reverse windows
-         "fm1_alnk0_irq", "fm1_timer5_irq",               # the audio ISR; TIMER5: the key / LED scan (bsp/boards/fm1/fm1_input.h)
-         "mix_part",                                        # a part's block (fx.c), on either core since the second
-         "uac_tap48",                                       # the USB audio input at 48 kHz: the 44.1 -> 48 resampler (usb.c)
-         "click_render",                                    # the metronome's click (click.c), while it sounds
-         "mod_begin", "mod_voice", "mod_end",                 # the modulation matrix (mod.c), called when active
-         "perf_begin", "perf_mute", "perf_pre", "perf_block", "perf_master",   # the FX layer (perform.c), when busy
-         "perf_flanger", "perf_phaser",                     # .. FLANGER, PHASER (1.2), while held or fading
-         "perf_throw",                                      # .. REV / ECHO THROW (1.5.1): per part, while held or gliding
-         "rev_room", "rev_spring", "rev_hall", "rev_side_mix",   # the reverb bus (fx.c): REVERB TYPE ROOM / SPRING / HALL (and its stereo)
-         "track_insert", "ins_drive", "ins_swept",          # the per-track INSERT (fx.c, 1.5), while a TYPE plays
-         "adp_render", "adp_block", "adp_post"]           # ADPCM (eng_adpcm.c, FELUCCA_ADPCM=1): voices, clock, echo
-# built only with FELUCCA_FM4=1 (DIGITAL, src/eng_digital.c; not in the default build, so not in BUDGET): absent,
-# they are skipped; present, checked against these (their budget lines until the engine was retired in 1.0)
-OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_custom": 558,
-            "uac_tap48": 507,           # (absent from a FELUCCA_UAC_48K=0 or FELUCCA_UAC=0 build)
-            "mix_part": 1754,
-            "adp_render": 2577, "adp_block": 102, "adp_post": 309}   # (ADPCM: built only with FELUCCA_ADPCM=1)           # (bsp/chip/libc.c: the word-wise memset / memcpy, longer loops, faster; FELUCCA_CPU2=1, the default since 1.6.1: out of line, either core may run it)
-# a FELUCCA_CPU2=0 build (no mix_part: inlined into the audio ISR, as 1.6) has the one-core ISR, checked against this
-ONE_CORE = {"fm1_alnk0_irq": 13782}
+FUNCS = ["analog_render", "digital_render", "phase_render", "lofi_render", "sample_render", "formant_render",
+         "trio_render", "trio_pass", "drawbar_render", "drawbar_block",
+         "grain_render", "grain_block", "slicer_track", "drums_mix",
+         "fm1_alnk0_irq"]
 TOL = 0.10                      # exact (no noise): small edits pass, a grown render loop does not
 DIV_W = 8                       # a divide weighs 1 + 8 instructions
 NEST = 4                        # an instruction in a loop inside a loop weighs 4, two deep 16, ...
@@ -71,29 +48,9 @@ def functions(path):
     return out
 
 
-def spans(heads):
-    """the loops of {head: end}: spans that overlap without one holding the other are one loop entered at two
-    heads (the compiler's layout: a rarely taken path branching back to a little before the loop's head), joined
-    into one; only a span inside another is a loop nested in it"""
-    out = []
-    for h, e in sorted(heads.items()):
-        i = 0
-        while i < len(out):
-            h0, e0 = out[i]
-            if h0 < h <= e0 < e or h < h0 <= e < e0:
-                del out[i]
-                h, e = min(h, h0), max(e, e0)
-                i = 0
-            else:
-                i += 1
-        out.append((h, e))
-    return out
-
-
 def cost(insns):
-    """loops: one span per loop head (the farthest backward branch to it), spans that only overlap joined
-    (spans()); an instruction inside d spans weighs NEST ** (d - 1) (an inner loop runs several times per pass
-    of the outer one)"""
+    """loops: one span per loop head (the farthest backward branch to it); an instruction inside d
+    spans weighs NEST ** (d - 1) (an inner loop runs several times per pass of the outer one)"""
     lo = insns[0][0]
     heads = {}
     for a, t in insns:
@@ -101,11 +58,10 @@ def cost(insns):
         if m and lo <= int(m.group(1), 16) < a:
             h = int(m.group(1), 16)
             heads[h] = max(heads.get(h, a), a)
-    loops = spans(heads)
     n = divs = calls = 0
     w = 0
     for a, t in insns:
-        d = min(sum(1 for h, e in loops if h <= a <= e), MAXD)
+        d = min(sum(1 for h, e in heads.items() if h <= a <= e), MAXD)
         if not d:
             continue
         k = NEST ** (d - 1)
@@ -124,7 +80,7 @@ def main():
         return 0
     fns = functions(dis)
     res = {n: cost(fns[n]) for n in FUNCS if fns.get(n)}
-    missing = [n for n in FUNCS if n not in res and n not in OPTIONAL]
+    missing = [n for n in FUNCS if n not in res]
     base = {}
     if os.path.exists(budget):
         for line in open(budget):
@@ -137,17 +93,14 @@ def main():
                     f"# function in build/felucca.dis, x{NEST} per nesting level, divides x{1 + DIV_W}. The check allows "
                     f"+{TOL * 100:.0f} %.\n# Rewritten by BUDGET_UPDATE=1.\n")
             for n, r in res.items():
-                if n not in OPTIONAL:
-                    f.write(f"{n} {r['cost']}\n")
+                f.write(f"{n} {r['cost']}\n")
         print(f"target: budget {budget} rewritten ({len(res)} functions)")
     fail = 0
     for n in missing:
         print(f"target: FAIL {n} not found in {dis} (renamed? inlined? update FUNCS)")
         fail += 1
     for n, r in res.items():
-        b = base.get(n, OPTIONAL.get(n))
-        if "mix_part" not in res and n in ONE_CORE:
-            b = ONE_CORE[n]
+        b = base.get(n)
         state = "no budget (BUDGET_UPDATE=1 adds it)" if b is None else "ok"
         if b is not None and not os.environ.get("BUDGET_UPDATE"):
             if r["cost"] > b * (1 + TOL):

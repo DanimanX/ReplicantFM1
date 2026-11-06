@@ -1,5 +1,0 @@
-blank_issues_enabled: true
-contact_links:
-  - name: Upstream Felucca
-    url: https://github.com/hugelton/Felucca
-    about: The firmware this is forked from. Its bugs and ideas are handled there, not here.

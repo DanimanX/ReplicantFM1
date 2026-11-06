@@ -1,425 +1,504 @@
-/* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* The editor's full backup (editor_backup.c: LIST / GET / PUT) against simulated NOR flash:
- * CRC before any write, stale runtime copies, USB resets and timeouts, malformed objects, older
- * project formats, settings values and user preset banks kept byte for byte. */
-static unsigned char host_samples[3][0x14000];
-#define SMP_USER_XIP(k) host_samples[k]
-#define main hostsim_main
-#include "hostsim.c"
-#undef main
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Host test of backup and restore over USB, the device's side (firmware/src/backup.c, after Polly's), on storage.c
+ * over a simulated NOR flash (erase -> 0xFF, a program only clears bits):
+ *   backup: the image streamed in frames that each fit the SysEx TX ring, one a main-loop pass, contiguous, the six
+ *     project objects as stored (absent ones absent), the CRCs right; stopped, the unsaved saved first; changes not
+ *     saved flagged; the saves held while it streams
+ *   restore: refused while playing (nothing fetched, nothing written); the cable cut at every read, a changed byte
+ *     (payload, record, head, tail), a wrong length, another version, Polly's backup, HOME at the question: nothing
+ *     changed; SEL: everything as backed up, the app reloaded; the panel's calibration and the flash outside the
+ *     objects never touched
+ *   a power cut at every flash write of a restore (a program torn in half): after the next boot (rs_boot) the project
+ *     is the old one or the new one, whole, never a mix
+ *   backup_test IMAGE_OUT   (the image, for tests/x0x_backup_test.py) */
+#include <setjmp.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#define X0X_HOST 1
+#include "../firmware/src/app/plat.h"
+#define FELUCCA_ID "FM-1_900"
 
-static int32_t fm1_enc_take(uint32_t e) { (void)e; return 0; }
-static void fm1_irq_off(void) {}
-static void fm1_irq_on(void) {}
-static void lcd_sync(void) {}
-static void lcd_power(uint32_t s) { (void)s; }   /* (MENU > SCREEN OFF: lcd.c) */
-static void lcd_wake_now(void) {}
-static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *p)
-{ (void)x; (void)y; (void)w; (void)h; (void)p; }
-#define FELUCCA_FLASH 1
-#include "../firmware/src/gfx.c"
-#include "../firmware/src/panel.c"
-#include "../firmware/src/ui.c"
-static void panel_setup(void) {}
+static uint8_t nor[0x100000];
+static int fails, cut_at = -1, ops, fetch_left = -1, flip_at = -1, playing, play_after = -1, answer = 1;
+static int reloads, flushes, holding, asks, begins, fetches, unsaved;
+static jmp_buf cut;
+static uint32_t notes[8], nnotes;
 
-static uint8_t nor[0x100000], flash_ok = 1;
-static int erase_error;
-static uint32_t erases;
-static int st_read(uint32_t off, void *dst, uint32_t n) { memcpy(dst, nor + off, n); return 0; }
-static int st_erase(uint32_t off) { if (erase_error) return -8; memset(nor + off, 0xFF, 4096); erases++; return 0; }
-static int st_prog(uint32_t off, const void *src, uint32_t n) { memcpy(nor + off, src, n); return 0; }
-static uint32_t irq_save(void) { return 0; }
-static void irq_restore(uint32_t f) { (void)f; }
-static uint32_t fl_jedec_ram(void) { return 0; }
-static void fl_plain_window_init(void) {}
-#define FL_FAR(fn) (fn)
+static int in_store(uint32_t off, uint32_t n);
+static void op(void)                              /* a flash write: the power may go here */
+{
+    if (cut_at >= 0 && ops++ == cut_at)
+        longjmp(cut, 1);
+}
+static int st_read(uint32_t off, void *dst, uint32_t n)
+{
+    if (off > sizeof nor || n > sizeof nor - off)
+        return -1;
+    memcpy(dst, nor + off, n);
+    return 0;
+}
+static int st_erase(uint32_t off)
+{
+    if (!in_store(off, 4096) || (off & 0xFFFu)) {
+        printf("erase outside the objects: %#x\n", off);
+        exit(1);
+    }
+    op();
+    memset(nor + off, 0xFF, 4096);
+    return 0;
+}
+static int st_prog(uint32_t off, const void *src, uint32_t n)
+{
+    const uint8_t *s = src;
+    if (!in_store(off, n)) {
+        printf("program outside the objects: %#x+%u\n", off, n);
+        exit(1);
+    }
+    if (cut_at >= 0 && ops == cut_at) {           /* torn: half of it written */
+        for (uint32_t i = 0; i < n / 2; i++)
+            nor[off + i] &= s[i];
+    }
+    op();
+    for (uint32_t i = 0; i < n; i++)
+        nor[off + i] &= s[i];
+    return 0;
+}
 #include "../firmware/src/storage.c"
-#include "../firmware/src/upreset.c"
-#include "../firmware/src/project.c"
-#include "old_pack.h"
 
-enum { ED_BACKUP_LIST = 65, ED_BACKUP_GET, ED_BACKUP_PUT };
-static uint8_t rep[4096];
-static uint32_t rep_n;
-static void ed_b(uint32_t v) { if (rep_n < sizeof rep) rep[rep_n++] = (uint8_t)(v & 127u); }
-static uint32_t ed_unpack7(const uint8_t *a, uint32_t na, uint8_t *out, uint32_t max)
+/* ota.c for its pack7 (its hooks unused here) */
+static int ota_wire_send(const uint8_t *p, uint32_t n) { (void)p; (void)n; return -1; }
+static int ota_frame_get(const uint8_t **p, uint32_t *n) { (void)p; (void)n; return 0; }
+static void ota_frame_done(void) {}
+static uint32_t t_ms;                             /* the clock (the backup's stall limit) */
+static uint32_t ota_now_ms(void) { return t_ms; }
+static void ota_idle(void) {}
+static int ota_erase(uint32_t off) { (void)off; return -1; }
+static int ota_prog(uint32_t off, const void *p, uint32_t n) { (void)off; (void)p; (void)n; return -1; }
+static int ota_fread(uint32_t off, void *p, uint32_t n) { (void)off; (void)p; (void)n; return -1; }
+static void ota_show(uint32_t step, int32_t code) { (void)step; (void)code; }
+static void ota_commit(const uint8_t *parm) { (void)parm; }
+#include "../firmware/src/ota.c"
+
+#include "../firmware/src/backup.c"
+
+static int in_store(uint32_t off, uint32_t n)     /* the six objects' sectors, the journal record's */
 {
-    uint32_t n = 0;
-    while (na && n < max) {
-        uint32_t m = *a++, j;
-        na--;
-        uint32_t k = na > 7u ? 7u : na;
-        if (!k || n + k > max || (m >> k))
-            return 0;
-        for (j = 0; j < k; j++, na--)
-            out[n++] = (uint8_t)(*a++ | ((m >> j) & 1u) << 7);
+    for (uint32_t i = 0; i < BU_NOBJ; i++) {
+        uint32_t b = st_sector(bu_obj(i), 0);
+        if (off >= b && off + n <= b + 2u * ST_SECTOR)
+            return 1;
     }
-    return na ? 0u : n;
-}
-static uint8_t ed_smp_buf[512] __attribute__((aligned(4)));
-static void fm1_wdt_feed(void) {}
-static int ed_flash_stop(void) { return transport_busy(); }
-#include "../firmware/src/editor_backup.c"
-
-static int check(const char *what, int ok)
-{
-    printf("backup: %-72s %s\n", what, ok ? "ok" : "FAIL");
-    return !ok;
+    return off >= RS_REC && off + n <= RS_REC + ST_SECTOR;
 }
 
-static void reset(void)
+/* the host side: the image served, the notes kept */
+static uint8_t img[BU_MAXIMG + 64];
+static uint32_t img_n;
+static int rs_fetch(uint32_t addr, uint8_t *dst, uint32_t n)
 {
-    memset(nor, 0xFF, sizeof nor);
-    memset(&song, 0, sizeof song);
-    memset(trk, 0, sizeof trk);
-    memset(&chain, 0, sizeof chain);
-    chain_defaults(&chain_config);
-    memset(proj_slot, 0, sizeof proj_slot);
-    memset(up_bank, 0, sizeof up_bank);
-    memset(&persist_saved, 0, sizeof persist_saved);
-    memset(&settings, 0, sizeof settings);
-    memset(&ui, 0, sizeof ui);
-    panel = PANEL_DEFAULT;
-    settings_init();
-    host_tracks_init();
-    fm1_ms = 0;
-    transport_req = 0;
-    usb.resets = 0;
-    erase_error = 0;
-    erases = 0;
-    ed_bk_valid = ed_bk_put = 0;
+    fetches++;
+    if (fetch_left == 0)
+        return -1;
+    if (fetch_left > 0)
+        fetch_left--;
+    if (play_after >= 0 && fetches > play_after)
+        playing = 1;
+    memset(dst, 0, n);
+    if (addr < img_n)
+        memcpy(dst, img + addr, addr + n <= img_n ? n : img_n - addr);
+    if (flip_at >= 0 && (uint32_t)flip_at >= addr && (uint32_t)flip_at < addr + n)
+        dst[flip_at - (int)addr] ^= 0x04;
+    return 0;
 }
+static int rs_note(uint32_t addr)
+{
+    if (nnotes < 8)
+        notes[nnotes++] = addr;
+    return 0;
+}
+static int rs_playing(void) { return playing; }
+static void rs_begin(void) { begins++; }
+static void rs_show(uint32_t pct) { (void)pct; }
+static int rs_ask(void) { asks++; return answer; }
+static void rs_reload(void) { reloads++; }
+static int rs_rec_erase(void) { return st_erase(RS_REC); }
+static int rs_rec_prog(uint32_t off, const void *src, uint32_t n) { return st_prog(RS_REC + off, src, n); }
+static int rs_rec_read(uint32_t off, void *dst, uint32_t n) { return st_read(RS_REC + off, dst, n); }
 
-static uint32_t call(uint32_t cmd, const uint8_t *a, uint32_t n)
+/* the backup's frames: decoded and put together as the host does */
+static int room = 1, frames_this_pass;
+static uint8_t got[BU_MAXIMG + 64];
+static uint32_t got_n, end_len, end_crc, max_wire, frames;
+static int end_seen, end_status, end_flags, gap;
+static int bu_room(void)                          /* a frame in the ring: full until the next pass; room -1: USB gone */
 {
-    rep_n = 0;
-    ed_backup_handle(cmd, a, n);
-    return rep_n;
+    return room < 0 ? -1 : room && !frames_this_pass;
 }
-static void put32(uint8_t *a, uint32_t v) { for (uint32_t i = 0; i < 5u; i++) a[i] = (uint8_t)((v >> (7u * i)) & 127u); }
-
-/* PUT begin: rc */
-static uint32_t put_begin(uint32_t id, uint32_t len, uint32_t crc)
+static int bu_send(const uint8_t *p, uint32_t n)
 {
-    uint8_t a[12] = {0, (uint8_t)id};
-    put32(a + 2, len);
-    put32(a + 7, crc);
-    call(ED_BACKUP_PUT, a, sizeof a);
-    return rep[2];
-}
-/* PUT one chunk of data at off: rc */
-static uint32_t put_chunk(uint32_t id, uint32_t off, const uint8_t *p, uint32_t n)
-{
-    uint8_t a[16 + 300];
-    uint32_t k = 7;
-    a[0] = 1;
-    a[1] = (uint8_t)id;
-    put32(a + 2, off);
-    while (n) {
-        uint32_t g = n > 7u ? 7u : n, m = 0, i;
-        for (i = 0; i < g; i++) m |= (uint32_t)(p[i] >> 7) << i;
-        a[k++] = (uint8_t)m;
-        for (i = 0; i < g; i++) a[k++] = p[i] & 127u;
-        p += g;
-        n -= g;
-    }
-    call(ED_BACKUP_PUT, a, k);
-    return rep[2];
-}
-static uint32_t put_end(uint32_t id, uint32_t op)   /* op 2 commit, 3 abort */
-{
-    uint8_t a[2] = {(uint8_t)op, (uint8_t)id};
-    call(ED_BACKUP_PUT, a, 2);
-    return rep[2];
-}
-/* a whole object: begin, 256-byte chunks, commit; the first failing rc or the commit's */
-static uint32_t put_all(uint32_t id, const void *v, uint32_t len, uint32_t crc)
-{
-    const uint8_t *p = v;
-    uint32_t off, rc = put_begin(id, len, crc);
-    for (off = 0; !rc && off < len; off += 256u)
-        rc = put_chunk(id, off, p + off, len - off > 256u ? 256u : len - off);
-    return rc ? rc : put_end(id, 2);
-}
-/* LIST: rc; the length and CRC of object id */
-static uint32_t list(uint32_t id, uint32_t *len, uint32_t *crc)
-{
-    uint32_t i;
-    call(ED_BACKUP_LIST, 0, 0);
-    if (rep[1])
-        return rep[1];
-    for (i = 0; i < rep[2]; i++) {
-        const uint8_t *o = rep + 3 + i * 11u;
-        if (o[0] == id) {
-            *len = ed_bk_r32(o + 1);
-            *crc = ed_bk_r32(o + 6);
-        }
+    uint8_t u[400];
+    uint32_t d, len, s = 0;
+    frames_this_pass++;
+    frames++;
+    if (n > max_wire)
+        max_wire = n;
+    d = ota_unpack7(p + 1, n - 2, u, sizeof u);
+    len = u[3] | u[4] << 8 | (uint32_t)u[5] << 16;
+    if (p[0] != 0xF0 || p[n - 1] != 0xF7 || u[0] != 0 || u[1] != 0x59 || len + 7u != d)
+        gap = 1;
+    for (uint32_t i = 0; i < len; i++)
+        s += u[6 + i];
+    if ((uint8_t)~s != u[6 + len])
+        gap = 1;
+    if (u[2] == BU_REQ) {
+        uint32_t off = bu_rd32(u + 6);
+        if (off != got_n)
+            gap = 1;
+        memcpy(got + got_n, u + 10, len - 4);
+        got_n += len - 4;
+    } else if (u[2] == BU_END) {
+        end_seen = 1;
+        end_len = bu_rd32(u + 6);
+        end_crc = bu_rd32(u + 10);
+        end_status = u[14];
+        end_flags = u[15];
     }
     return 0;
 }
-static uint32_t get(uint32_t id, uint32_t off, uint32_t count)
+static void bu_flush(void) { flushes++; }
+static int bu_unsaved(void) { return unsaved; }
+static void bu_hold(int on) { holding = on; }
+
+static int check(const char *what, int ok)
 {
-    uint8_t a[8] = {(uint8_t)id};
-    put32(a + 1, off);
-    a[6] = (uint8_t)(count & 127u);
-    a[7] = (uint8_t)(count >> 7);
-    call(ED_BACKUP_GET, a, sizeof a);
-    return rep[1];
+    printf("%-66s %s\n", what, ok ? "ok" : "FAIL");
+    fails += !ok;
+    return ok;
 }
 
-int main(void)
+/* the objects as st_load gives them */
+typedef struct { int n[BU_NOBJ]; uint8_t d[BU_NOBJ][ST_PAYLOAD_MAX]; } set_t;
+static set_t set_a, set_b, now;
+static void snap(set_t *s)
 {
-    int bad = 0;
-    uint32_t len = 0, crc = 0, before;
-    static project_store_t st;
-    static project_v6_t v6;
-    persist_t ps;
+    for (uint32_t i = 0; i < BU_NOBJ; i++)
+        s->n[i] = st_load(bu_obj(i), s->d[i], ST_PAYLOAD_MAX);
+}
+static int same(const set_t *a, const set_t *b)
+{
+    for (uint32_t i = 0; i < BU_NOBJ; i++)
+        if (a->n[i] != b->n[i] || (a->n[i] > 0 && memcmp(a->d[i], b->d[i], (size_t)a->n[i])))
+            return 0;
+    return 1;
+}
+static uint8_t panel_was[2 * ST_SECTOR];
+static int panel_same(void) { return !memcmp(nor + st_sector(OBJ_PANEL, 0), panel_was, sizeof panel_was); }
 
-    reset();
-    trk[0].step[0] = (step_t){{60}, 1, ST_NOTE, 0, 96, 0, 0};
-    bad += check("LIST captures the runtime: 13 objects (id 8 empty, id 9 the FM6 patches), runtime 3840 B (FUN10)",
-                 list(0, &len, &crc) == 0 && rep[2] == 13u && len == sizeof(project_store_t) && len == 3840u &&
-                 crc == st_crc32(ED_BK_RAW, len));
-    bad += check("an empty project slot lists as length 0", list(2, &len, &crc) == 0 && len == 0);
-    bad += check("GET of the runtime copy", get(0, 0, 64) == 0);
-    project_save(0);
-    bad += check("a project save after LIST reused the staging RAM: GET of the runtime is stale (5)",
-                 get(0, 0, 64) == 5u);
-    bad += check("a new LIST makes it readable again", list(0, &len, &crc) == 0 && get(0, 0, 64) == 0);
-    usb.resets++;
-    bad += check("a USB reset after LIST: GET is stale (5)", get(2, 0, 16) == 5u);
+static void fill(uint8_t *p, uint32_t n, uint32_t seed)
+{
+    for (uint32_t i = 0; i < n; i++)
+        p[i] = (uint8_t)((i * 31u + seed * 7u) ^ (i >> 5));
+}
+static void save(uint32_t obj, uint32_t n, uint32_t seed)
+{
+    static uint8_t b[ST_PAYLOAD_MAX];
+    fill(b, n, seed);
+    if (st_save(obj, b, n))
+        printf("save failed\n");
+}
 
-    /* settings */
-    reset();
-    memset(&ps, 0, sizeof ps);
-    settings_export(&ps);
-    ps.lowcut = 2;                                       /* SPEAKER BASS+ */
-    ps.palette = palette_to_stored(6);
-    bad += check("settings with SPEAKER BASS+ restore", put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 &&
-                 settings.lowcut == 2u && fx_lowcut == 2u && settings.palette == 6u);
-    ps.palette = 13;                                     /* an older backup: its PAPER (old id 13) */
-    bad += check("settings of an older backup restore with the palette migrated",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 && settings.palette == 6u);
-    ps.palette = palette_to_stored(6);
-    before = erases;
-    ps.lowcut = 3;
-    bad += check("settings with an unknown SPEAKER value are refused, nothing written",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 2u && erases == before && settings.lowcut == 2u);
-    ps.lowcut = 0;
-    ps.bold = hold_to_stored(0, 3);                      /* HOLD 0.6 s */
-    bad += check("settings with HOLD 0.6 s restore",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 && HOLD_MS[settings_hold] == 600u);
-    ps.bold = 1;                                         /* an older backup (its font weight): HOLD 0.4 s */
-    bad += check("settings of an older backup restore with HOLD 0.4 s",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 && HOLD_MS[settings_hold] == 400u);
-    before = erases;
-    ps.bold = HOLD_TAG + 7u;
-    bad += check("settings with an unknown HOLD value are refused, nothing written",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 2u && erases == before);
-    ps.bold = 0;
-    ps.zoom = LEDS_TAG | LEDS_INV;                       /* LEDS INV */
-    bad += check("settings with LEDS INV restore",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 && settings_leds == LEDS_INV);
-    ps.zoom = 1;                                         /* an older backup (its large readout): LEDS DIM */
-    bad += check("settings of an older backup restore with LEDS DIM",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 && settings_leds == LEDS_DIM);
-    before = erases;
-    ps.zoom = LEDS_TAG | LEDS_DIM_LO;                    /* LEDS DIM LO, OFF (appended) */
-    bad += check("settings with LEDS DIM LO restore",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 && settings_leds == LEDS_DIM_LO);
-    ps.zoom = LEDS_TAG | LEDS_OFF;
-    bad += check("settings with LEDS OFF restore",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 0 && settings_leds == LEDS_OFF);
-    before = erases;
-    ps.zoom = LEDS_TAG + 4u;
-    bad += check("settings with an unknown LEDS value are refused, nothing written",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps)) == 2u && erases == before);
-    ps.zoom = 0;
-    bad += check("a wrong CRC is refused before any write",
-                 put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps) ^ 1u) == 2u && erases == before);
+static int backup(int play)
+{
+    int passes = 0;
+    got_n = 0;
+    end_seen = gap = 0;
+    frames = max_wire = 0;
+    playing = play;
+    bu_start();
+    playing = 0;
+    while (bu.on && passes < 100000) {
+        frames_this_pass = 0;
+        room = passes % 3 != 1;                   /* the ring busy now and then */
+        bu_step();
+        if (frames_this_pass > 1)
+            gap = 1;
+        passes++;
+    }
+    return passes;
+}
+static int restore(void)
+{
+    nnotes = 0;
+    fetches = 0;
+    return restore_rx(img_n, bu_crc(0, img, img_n), 0);
+}
 
-    /* malformed requests */
-    bad += check("an unknown object id is refused", put_begin(8, sizeof ps, 0) == 1u);
-    bad += check("a project of the wrong length is refused", put_begin(2, sizeof(project_store_t) - 4u, 0) == 1u);
-    bad += check("settings of the wrong length are refused", put_begin(1, sizeof ps + 4u, 0) == 1u);
-    bad += check("a chunk without a begin is refused (5)", (ed_bk_put = 0, put_chunk(1, 0, (const uint8_t *)&ps, 16)) == 5u);
-    put_begin(1, sizeof ps, st_crc32(&ps, sizeof ps));
-    bad += check("a chunk at the wrong offset is refused", put_chunk(1, 16, (const uint8_t *)&ps, 16) == 1u);
-    bad += check("a chunk for another object is refused (5)", put_chunk(2, 0, (const uint8_t *)&ps, 16) == 5u);
+int main(int argc, char **argv)
+{
+    FILE *f;
+    int rc;
+    memset(nor, 0x5A, sizeof nor);                /* not erased anywhere: a write outside would show */
+    for (uint32_t i = 0; i < BU_NOBJ; i++) {
+        st_erase(st_sector(bu_obj(i), 0));
+        st_erase(st_sector(bu_obj(i), 1));
+    }
+    st_erase(RS_REC);
+    memset(nor + st_sector(OBJ_PANEL, 0), 0x33, sizeof panel_was);   /* the calibration: never touched */
+    memcpy(panel_was, nor + st_sector(OBJ_PANEL, 0), sizeof panel_was);
+
+    /* set A: the settings, the sound (whole), the stream's first two and its last; the song absent */
+    save(OBJ_SET, 120, 1);
+    save(OBJ_SOUND, ST_PAYLOAD_MAX, 2);
+    save(OBJ_SOUND, ST_PAYLOAD_MAX, 3);           /* (its B copy current) */
+    save(OBJ_PAT0, ST_PAYLOAD_MAX, 10);
+    save(OBJ_PAT1, 1777, 11);
+    save(OBJ_MOTION, 16, 12);
+    snap(&set_a);
+
+    /* ---- backup */
+    flushes = 0;
+    backup(0);
+    check("backup: an end frame, status 0, the frames contiguous", end_seen && end_status == 0 && !gap);
+    check("... each frame fits the SysEx ring whole (<= 64 packets)", max_wire <= 64u * 3u);
+    check("... stopped: the unsaved saved first; the autosave held, then free", flushes == 1 && holding == 0);
+    check("... the length and the CRC-32 of the whole", end_len == got_n && end_crc == bu_crc(0, got, got_n));
     {
-        uint32_t off = 0, step = sizeof ps - 8u;
-        put_begin(1, sizeof ps, st_crc32(&ps, sizeof ps));
-        for (; off + 256u <= step; off += 256u)
-            put_chunk(1, off, (const uint8_t *)&ps + off, 256);
-        if (off < step) put_chunk(1, off, (const uint8_t *)&ps + off, step - off);
-        bad += check("a chunk past the length is refused", put_chunk(1, step, (const uint8_t *)&ps, 16) == 1u);
-    }
-    bad += check("commit before all bytes arrived is refused", put_end(1, 2) == 2u && erases == before);
-    put_begin(1, sizeof ps, st_crc32(&ps, sizeof ps));
-    put_chunk(1, 0, (const uint8_t *)&ps, 64);
-    usb.resets++;
-    bad += check("a USB reset during PUT ends it (5)", put_chunk(1, 64, (const uint8_t *)&ps + 64, 64) == 5u);
-    put_begin(1, sizeof ps, st_crc32(&ps, sizeof ps));
-    fm1_ms += 16000u;
-    bad += check("16 s without a chunk ends the PUT (5)", put_chunk(1, 0, (const uint8_t *)&ps, 64) == 5u);
-    put_begin(2, sizeof st, 0);
-    put_chunk(2, 0, (const uint8_t *)&ps, 64);
-    project_save(1);
-    bad += check("a project save during PUT (the staging RAM) ends it (5)",
-                 put_chunk(2, 64, (const uint8_t *)&ps, 64) == 5u);
-    transport_req = 1;
-    bad += check("PUT while starting PLAY is refused (3)", put_begin(1, sizeof ps, 0) == 3u);
-    transport_req = 0;
-
-    /* projects */
-    reset();
-    trk[1].step[3] = (step_t){{64}, 1, ST_NOTE, 0, 96, 0, 0};
-    project_capture(&proj_scratch);
-    proj_pack(&st, &proj_scratch);
-    bad += check("a FUN10 project restores into slot 3 (flash and RAM)",
-                 put_all(4, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && project_used(2) &&
-                 !memcmp(&proj_slot[2], &st, sizeof st) && st_load(OBJ_PROJECT0 + 2, &proj_wire, sizeof proj_wire) == (int)sizeof st);
-    {   /* FUN8 of 1.0.x (3584 bytes, 91 parameters) and FUN9 of 1.1 (3648, 99): restore as FUN10, E0 at P_E0, lanes
-         * 100 %, the four 1.2 parameters at their defaults; a FUN9 with 64 motion records keeps them all */
-        static uint8_t v8[3584], v9[3648];
-        uint32_t k, ok;
-        trk[2].p[P_E0] = 2;
-        trk[2].p[P_LN3] = 90;
-        project_capture(&proj_scratch);
-        proj_scratch.t[2].p[P_LN3] = 127;              /* (FUN8 had no lane levels) */
-        bad += check("a FUN8 project (1.0.x) restores as FUN10 into slot 2, E0 at P_E0, lane levels 100 %",
-                     old_pack(v8, &proj_scratch, OLD_FUN8, 91u) == sizeof v8 &&
-                     put_all(3, v8, sizeof v8, st_crc32(v8, sizeof v8)) == 0 && ((uint32_t *)proj_slot[1].raw)[0] == PROJ_MAGIC &&
-                     proj_import(&proj_scratch, &proj_slot[1], sizeof st) && proj_scratch.t[2].p[P_E0] == 2 &&
-                     proj_scratch.t[2].p[P_LN3] == 127 && proj_scratch.t[1].step[3].note[0] == 64u);
-        project_capture(&proj_scratch);
-        for (k = 0; k < 64u; k++)
-            proj_scratch.motion.event[k] = (motion_event_t){(uint8_t)(1u << 6 | k), P_REV, (int8_t)k};
-        proj_scratch.motion.count = 64;
-        proj_scratch.motion.on = 2;
-        ok = old_pack(v9, &proj_scratch, OLD_FUN9, 99u) == sizeof v9 &&
-             put_all(4, v9, sizeof v9, st_crc32(v9, sizeof v9)) == 0 && ((uint32_t *)proj_slot[2].raw)[0] == PROJ_MAGIC &&
-             proj_import(&proj_scratch, &proj_slot[2], sizeof st) && proj_scratch.t[2].p[P_E0] == 2 &&
-             proj_scratch.t[2].p[P_LN3] == 90 && proj_scratch.motion.count == 64u && proj_scratch.motion.event[63].value == 63 &&
-             proj_scratch.t[0].p[P_LSYNC] == 0 && proj_scratch.t[0].p[P_LTRIG] == 0 && proj_scratch.t[0].p[P_LPOL] == 0 &&
-             proj_scratch.t[0].p[P_SQNT] == 1;
-        bad += check("a FUN9 project (1.1) restores as FUN10 into slot 3: its 64 records, the lanes, LFO 2 / QUANTIZE defaults", ok);
-    }
-    memset(&v6, 0, sizeof v6);                           /* FUN6: 69 parameters, steps out of range */
-    v6.magic = PROJ_MAGIC_V6;
-    v6.size = sizeof v6;
-    for (uint32_t i = 0; i < G_COUNT; i++)
-        v6.g[i] = GP[i].def;
-    for (uint32_t i = 0; i < NTRK; i++)
-        v6.t[i].engine = trk[i].engine;
-    v6.t[0].step[0] = (step10_t){{255, 72}, 9, 7, 0, 96, 0, 0};
-    v6.t[0].p[61] = 3;                                   /* old E0 */
-    memset(&v6.chain, 0, sizeof v6.chain);
-    v6.sum = proj_hash(&v6, sizeof v6 - 4u);
-    bad += check("a FUN6 project restores as FUN10, bounded, its E0 at P_E0",
-                 put_all(5, &v6, sizeof v6, st_crc32(&v6, sizeof v6)) == 0 && ((uint32_t *)proj_slot[3].raw)[0] == PROJ_MAGIC &&
-                 proj_import(&proj_scratch, &proj_slot[3], sizeof st) && proj_scratch.t[0].step[0].n == 4u &&
-                 proj_scratch.t[0].step[0].note[0] == 127u && proj_scratch.t[0].p[P_E0] ==
-                 clamp(3, param_desc_of(trk[0].engine, P_E0)->min, param_desc_of(trk[0].engine, P_E0)->max));
-    {   /* 1.0.3: the FM6 patch bank (id 8) is retired; an older archive's bank moves into its user presets (ids 6, 7
-         * restored first), the user presets' patches are id 9 */
-        static up_bank_t ub;
-        static fm6_bank_t bk;
-        static upf_t got;
-        uint8_t pk[FM6_PACKED];
-        static const int16_t SL[5] = {FM6_NFACTORY + 2, 1, FM6_NFACTORY + 4, FM6_NFACTORY + 2, FM6_NFACTORY + 2};
-        memset(&ub, 0, sizeof ub);
-        ub.magic = UP_BANK_MAGIC; ub.rsize = sizeof(up_rec_t); ub.nslot = UP_PER_BANK;
-        for (uint32_t k = 0; k < 5u; k++) {             /* slots 1..5: B3, F2, B5 (empty), B3 on DRUM, B3 */
-            up_rec_t *r = &ub.r[k];
-            uint32_t e = k == 3u ? ENGI_DRUM : ENGI_FM6;
-            r->used = UP_USED; r->ver = UP_VER; r->engine = (uint8_t)e; r->np = P_COUNT;
-            r->name[0] = (char)('A' + k);
-            for (uint32_t i = 0; i < P_COUNT; i++) up_set_value(r, i, param_desc_of(e, i)->def);
-            up_set_value(r, P_E7, SL[k]);                 /* (the raw stored value: B slots as 1.0.2 wrote them) */
+        uint32_t pos = BU_HEAD, ok = bu_rd32(got) == BU_MAGIC && bu_rd16(got + 6) == BU_NOBJ &&
+                                      bu_rd32(got + 12) == bu_crc(0, got, 12) && bu_rd32(got + 8) == 0;
+        for (uint32_t i = 0; i < BU_NOBJ && ok; i++) {
+            uint32_t n = bu_rd16(got + pos + 2);
+            ok = bu_rd16(got + pos) == bu_obj(i) && (int)n == (set_a.n[i] < 0 ? 0 : set_a.n[i]) &&
+                 bu_rd32(got + pos + 4) == bu_crc(0, got + pos + 8, n) &&
+                 (!n || !memcmp(got + pos + 8, set_a.d[i], n));
+            pos += BU_REC + n;
         }
-        ub.r[4].name[1] = 'X';
-        up_set_value(&ub.r[4], P_E0, 3);                 /* (another sound than slot 1's) */
-        memset(&bk, 0, sizeof bk);
-        bk.magic = FM6_BANK_MAGIC; bk.ver = 1; bk.nslot = FM6_BANK_N; bk.used = 1u << 2;
-        memcpy(bk.v[2], FM6_FACTORY[5], FM6_PACKED);
-        memcpy(bk.v[2] + 118, "BANK B3   ", 10);
-        upf_empty();
-        bad += check("the user presets of an old archive (id 6) restore", put_all(6, &ub, sizeof ub, st_crc32(&ub, sizeof ub)) == 0);
-        bad += check("an old archive's FM6 bank (id 8) is taken (0)", put_all(8, &bk, sizeof bk, st_crc32(&bk, sizeof bk)) == 0);
-        bad += check("  .. its B3 patch is now the B3 presets' own (slots 1 and 5)",
-                     !upf_get(0, pk) && !memcmp(pk + 118, "BANK B3   ", 10) && !upf_get(4, pk) && !memcmp(pk + 118, "BANK B3", 7));
-        bad += check("  .. an F slot, an empty B slot and a DRUM sound get none (factory / init / no patch, as before)",
-                     upf_get(1, pk) && upf_get(2, pk) && upf_get(3, pk));
-        bad += check("  .. written to flash (the user presets' FM6 patches)",
-                     st_load(OBJ_UPFM6, &got, sizeof got) == (int)sizeof got && !memcmp(&got, &upf, sizeof got));
-        up_load(0);
-        bad += check("  .. and the B3 preset loads it, SLOT OWN", TSEL->eng_req == ENGI_FM6 &&
-                     !memcmp(fm6_patch[song.sel] + FP_NAME, "BANK B3", 7) && TSEL->p[P_E7] == FM6_OWN);
-        up_load(1);
-        bad += check("  .. the F2 preset loads the factory patch, SLOT F2", TSEL->p[P_E7] == 1 &&
-                     !memcmp(fm6_patch[song.sel] + FP_NAME, FM6_FACTORY[1] + 118, 10));
-        bad += check("a restore of id 8 twice moves nothing more (idempotent)",
-                     put_all(8, &bk, sizeof bk, st_crc32(&bk, sizeof bk)) == 0 && !memcmp(&got, &upf, sizeof got));
-        bad += check("an empty id 8 (a 1.0.3 archive) is taken and ignored", put_all(8, 0, 0, st_crc32(0, 0)) == 0 &&
-                     !memcmp(&got, &upf, sizeof got));
-        bk.v[3][0] = 200;
-        bad += check("an FM6 bank with a byte above 127 is refused (2)", put_all(8, &bk, sizeof bk, st_crc32(&bk, sizeof bk)) == 2u);
-        bad += check("id 8 lists empty, id 9 with the patches' length", list(8, &len, &crc) == 0 && len == 0 &&
-                     list(9, &len, &crc) == 0 && len == sizeof(upf_t) && crc == st_crc32(&upf, sizeof upf));
-        memcpy(&got, &upf, sizeof got);
-        upf_empty();
-        bad += check("id 9 restores the user presets' FM6 patches (flash and RAM)",
-                     put_all(9, &got, sizeof got, st_crc32(&got, sizeof got)) == 0 && !memcmp(&got, &upf, sizeof got) &&
-                     !upf_get(0, pk) && !memcmp(pk + 118, "BANK B3", 7));
-        got.magic ^= 1;
-        bad += check("an id 9 of another layout is refused (2), the patches kept",
-                     put_all(9, &got, sizeof got, st_crc32(&got, sizeof got)) == 2u && !upf_get(0, pk));
-        bad += check("an id 9 of the wrong size is refused at begin (1)", put_begin(9, sizeof got - 4u, 0) == 1u);
-        bad += check("an id 10 is refused (1)", put_begin(10, 0, 0) == 1u);
+        check("... the image: the head, 6 records as stored (absent: 0 bytes)", ok);
+        check("... the tail: the CRC-32 of all before", pos + 4u == got_n && bu_rd32(got + pos) == bu_crc(0, got, pos));
+        printf("  %u bytes in %u frames (largest %u wire bytes)\n", got_n, frames, max_wire);
     }
-    memcpy(&st, &proj_slot[2], sizeof st);
-    erase_error = 1;
-    proj_slot[2].raw[100] ^= 1;                          /* (marks the RAM copy, to see it is kept) */
-    memcpy(&v6, &proj_slot[2], sizeof v6);
-    bad += check("a flash error on commit (4) keeps the slot's RAM copy",
-                 put_all(4, &st, sizeof st, st_crc32(&st, sizeof st)) == 4u && !memcmp(&proj_slot[2], &v6, sizeof v6));
-    erase_error = 0;
-    bad += check("an empty project object clears the slot", put_all(4, 0, 0, st_crc32(0, 0)) == 0 && !project_used(2));
-    st.raw[200] ^= 1;                                    /* hash no longer matches */
-    bad += check("a project whose own hash fails is refused", put_all(4, &st, sizeof st, st_crc32(&st, sizeof st)) == 2u);
+    memcpy(img, got, got_n);
+    img_n = got_n;
+    if (argc > 1 && (f = fopen(argv[1], "wb"))) {
+        fwrite(img, 1, img_n, f);
+        fclose(f);
+    }
+    flushes = 0;
+    unsaved = 1;
+    backup(1);
+    unsaved = 0;
+    check("backup while playing: nothing saved first, unsaved changes flagged", flushes == 0 && end_flags == 1 &&
+          bu_rd32(got + 8) == 1 && !gap && end_len == img_n && !memcmp(got + 16, img + 16, img_n - 20));
+    backup(1);
+    check("... nothing unsaved: not flagged", end_flags == 0 && got_n == img_n && !memcmp(got, img, img_n));
 
-    /* the runtime */
-    reset();
-    trk[2].step[5] = (step_t){{67}, 1, ST_NOTE, 0, 96, 0, 0};
-    trk[2].p[P_LEVEL] = 77;
-    project_capture(&proj_scratch);
-    proj_pack(&st, &proj_scratch);
-    host_tracks_init();
-    bad += check("the runtime object restores the tracks",
-                 put_all(0, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && trk[2].step[5].note[0] == 67u &&
-                 trk[2].p[P_LEVEL] == 77);
+    {                                             /* a cut cable: the ring never drains / USB gone */
+        int passes = 0, held_long;
+        got_n = 0;
+        end_seen = 0;
+        t_ms = 1000;
+        playing = 1;
+        bu_start();
+        playing = 0;
+        for (int k = 0; k < 5; k++) {             /* a few frames out */
+            frames_this_pass = 0;
+            room = 1;
+            bu_step();
+            t_ms += 10;
+        }
+        room = 0;                                 /* then the ring full for good */
+        while (bu.on && passes < 1000) {
+            frames_this_pass = 0;
+            bu_step();
+            t_ms += 10;
+            passes++;
+        }
+        held_long = passes * 10 >= (int)BU_STALL_MS && passes * 10 <= (int)BU_STALL_MS + 20;
+        check("backup stalled (the ring never drains): given up after ~2 s, autosave free",
+              !bu.on && !holding && !end_seen && held_long);
+        bu_start();
+        frames_this_pass = 0;
+        room = 1;
+        bu_step();
+        room = -1;                                /* unplugged / suspended */
+        frames_this_pass = 0;
+        bu_step();
+        check("... USB gone: given up at once, autosave free", !bu.on && !holding && !end_seen);
+        room = 1;
+        t_ms = 0;
+    }
 
-    /* user preset banks: unknown record versions are kept as bytes */
-    reset();
+    /* set B: other contents, the absent song filled, settings of another size */
+    save(OBJ_SET, 140, 4);
+    save(OBJ_SOUND, 3000, 5);
+    save(OBJ_SONG, 2000, 6);                      /* absent in A */
+    save(OBJ_PAT1, 100, 7);
+    save(OBJ_MOTION, 3840, 8);
+    snap(&set_b);
+    check("set B differs from A", !same(&set_a, &set_b));
+
+    /* ---- refused, failed: nothing changes */
+    playing = 1;
+    ops = 0;
+    cut_at = -1;
+    rc = restore();
+    playing = 0;
+    snap(&now);
+    check("playing: STOP FIRST (RS_E_PLAYING), told, nothing read", rc == RS_E_PLAYING && fetches == 0 && nnotes == 1 &&
+                                                                    notes[0] == (RS_FAIL_ADDR | RS_E_PLAYING));
+    check("... nothing changed", same(&now, &set_b));
     {
-        static up_bank_t b;
-        memset(&b, 0, sizeof b);
-        b.magic = UP_BANK_MAGIC;
-        b.rsize = sizeof(up_rec_t);
-        b.nslot = UP_PER_BANK;
-        b.r[4].used = UP_USED;
-        b.r[4].ver = 99;                                 /* a future record */
-        memcpy(b.r[4].name, "Future", 7);
-        b.r[4].p[0] = 55;
-        bad += check("a bank with a future record version restores byte for byte",
-                     put_all(6, &b, sizeof b, st_crc32(&b, sizeof b)) == 0 &&
-                     st_load(OBJ_UPRESET0, &proj_wire, sizeof proj_wire) == (int)sizeof b &&
-                     !memcmp(&proj_wire, &b, sizeof b));
-        b.nslot = 3;
-        bad += check("a bank with the wrong slot count is refused", put_all(7, &b, sizeof b, st_crc32(&b, sizeof b)) == 2u);
+        int all = 1, n_fetch;
+        fetch_left = -1;
+        answer = 0;                               /* (to count the reads; answered no) */
+        restore();
+        n_fetch = fetches;
+        for (int k = 0; k < n_fetch; k++) {       /* the cable cut at every read */
+            fetch_left = k;
+            asks = 0;
+            rc = restore();
+            snap(&now);
+            all &= rc == RS_E_FETCH && asks == 0 && same(&now, &set_b) && nnotes == 1;
+        }
+        fetch_left = -1;
+        printf("  %d reads a restore\n", n_fetch);
+        check("the cable cut at each read: RS_E_FETCH, never asked, nothing changed", all);
     }
-    printf("backup test %s\n", bad ? "FAILED" : "passed");
-    return bad != 0;
+    answer = 1;
+    {
+        int all = 1;
+        uint32_t spots[] = {20, BU_HEAD + BU_REC + 5, BU_HEAD + BU_REC + 119, 2000, img_n - 300, img_n - 10};
+        for (uint32_t k = 0; k < sizeof spots / sizeof spots[0]; k++) {
+            flip_at = (int)spots[k];
+            rc = restore();
+            snap(&now);
+            all &= rc != 0 && same(&now, &set_b);
+        }
+        flip_at = (int)(img_n - 2);               /* the tail */
+        rc = restore();
+        all &= rc == RS_E_TOTAL;
+        flip_at = 3;                              /* the head */
+        rc = restore();
+        all &= rc == RS_E_HEAD;
+        flip_at = BU_HEAD + 1;                    /* the first record's id */
+        rc = restore();
+        all &= rc == RS_E_OBJ;
+        flip_at = BU_HEAD + BU_REC + 30;          /* the project's payload */
+        rc = restore();
+        all &= rc == RS_E_CRC;
+        flip_at = -1;
+        snap(&now);
+        check("a byte changed (payload, record, head, tail): refused, nothing changed", all && same(&now, &set_b));
+    }
+    rc = restore_rx(img_n + 4, bu_crc(0, img, img_n), 0);
+    snap(&now);
+    check("a wrong length: refused, nothing changed", rc != 0 && same(&now, &set_b));
+    {   /* another version, Polly's backup ("PLYB"): their heads whole (CRCs right), refused */
+        uint8_t keep[BU_HEAD + 4];
+        uint32_t tail = img_n - 4u;
+        int all = 1;
+        memcpy(keep, img, BU_HEAD);
+        memcpy(keep + BU_HEAD, img + tail, 4);
+        for (int k = 0; k < 3; k++) {
+            memcpy(img, keep, BU_HEAD);
+            if (k == 0)
+                bu_wr16(img + 4, 2);
+            else if (k == 1)
+                bu_wr16(img + 6, 18);
+            else
+                bu_wr32(img, 0x42594C50u);
+            bu_wr32(img + 12, bu_crc(0, img, 12));
+            bu_wr32(img + tail, bu_crc(0, img, tail));
+            rc = restore();
+            snap(&now);
+            all &= rc == RS_E_HEAD && same(&now, &set_b) && fetches == 1;
+        }
+        check("another version, another count, Polly's backup: RS_E_HEAD, nothing changed", all && BU_VERSION == 1u);
+        memcpy(img, keep, BU_HEAD);
+        memcpy(img + tail, keep + BU_HEAD, 4);
+    }
+    rc = restore_rx(img_n, bu_crc(0, img, img_n) ^ 1u, 0);
+    snap(&now);
+    check("the host's CRC-32 not the image's: RS_E_TOTAL, nothing changed", rc == RS_E_TOTAL && same(&now, &set_b));
+    play_after = 5;                               /* PLAY (MIDI start) during the transfer */
+    rc = restore();
+    play_after = -1;
+    playing = 0;
+    snap(&now);
+    check("started playing meanwhile: RS_E_PLAYING, nothing changed", rc == RS_E_PLAYING && same(&now, &set_b));
+    answer = 0;
+    asks = reloads = 0;
+    rc = restore();
+    snap(&now);
+    check("HOME at the question: RS_E_NO, asked once, the host told first", rc == RS_E_NO && asks == 1 && nnotes == 2 &&
+                                                                         notes[0] == RS_ASK_ADDR &&
+                                                                         notes[1] == (RS_FAIL_ADDR | RS_E_NO));
+    check("... nothing changed, nothing reloaded", same(&now, &set_b) && reloads == 0);
+
+    /* ---- SEL: restored */
+    answer = 1;
+    begins = 0;
+    rc = restore();
+    snap(&now);
+    check("SEL: restored (0), the host told, the app reloaded", rc == 0 && nnotes == 2 && notes[1] == RS_OK_ADDR &&
+                                                               reloads == 1 && begins == 1);
+    check("... every object as backed up (the song absent in A: absent)", same(&now, &set_a) && now.n[4] < 0);
+    check("... the panel's calibration untouched", panel_same());
+    check("... the journal record erased", nor[RS_REC] == 0xFF && nor[RS_REC + 299] == 0xFF);
+    backup(0);
+    check("... a backup of it is the image again", got_n == img_n && !memcmp(got, img, img_n));
+    save(OBJ_SONG, 50, 9);
+    {
+        uint8_t b[64];
+        fill(b, 50, 9);
+        check("... saving after it works (the next seq)", st_load(OBJ_SONG, now.d[0], 64) == 50 &&
+                                                         !memcmp(now.d[0], b, 50));
+    }
+
+    /* ---- a power cut at every flash write: old or new after the boot, whole */
+    {
+        static uint8_t start[sizeof nor];
+        int k, n_old = 0, n_new = 0, mixed = 0, total;
+        save(OBJ_SET, 140, 4);
+        save(OBJ_SOUND, 3000, 5);
+        save(OBJ_SONG, 2000, 6);
+        save(OBJ_PAT1, 100, 7);
+        save(OBJ_MOTION, 3840, 8);
+        snap(&set_b);
+        memcpy(start, nor, sizeof nor);
+        ops = 0;
+        cut_at = 1 << 30;                         /* counting only */
+        restore();
+        total = ops;
+        for (k = 0; k < total; k++) {
+            memcpy(nor, start, sizeof nor);
+            ops = 0;
+            cut_at = k;
+            if (!setjmp(cut)) {
+                restore();
+                printf("cut %d: not reached\n", k);
+                mixed++;
+                continue;
+            }
+            cut_at = -1;
+            rs_boot();                            /* the next power-on */
+            snap(&now);
+            if (same(&now, &set_a))
+                n_new++;
+            else if (same(&now, &set_b))
+                n_old++;
+            else
+                mixed++;
+            if (nor[RS_REC] != 0xFF)
+                mixed++;
+        }
+        cut_at = -1;
+        printf("  %d flash writes a restore: cut before the record %d (old), after %d (new, finished at boot)\n", total,
+               n_old, n_new);
+        check("a power cut at each write: the old set or the new, whole, never a mix", !mixed && n_old && n_new);
+        check("... the panel's calibration untouched through all of it", panel_same());
+    }
+    printf("%s\n", fails ? "BACKUP TEST FAILED" : "backup test passed");
+    return fails != 0;
 }

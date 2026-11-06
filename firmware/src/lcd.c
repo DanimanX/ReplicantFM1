@@ -1,14 +1,17 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* ST7789-class 240x240 panel on SPI1:
- * PC9 CLK, PC10 DO, PC7 CS, PC8 D/C, backlight PA2 active low. Polled DMA
- * transfers; every source buffer must be in RAM.
- * A pixel transfer is left running (lcd_busy): the next LCD access, or a write
- * to its source buffer (lcd_sync), waits for it, so the main loop works
+/* ST7789-class 240x240 panel on SPI1: PC9 CLK, PC10 DO, PC7 CS, PC8 D/C,
+ * backlight PA2 active low. Polled DMA transfers; every source buffer must be
+ * in RAM. A pixel transfer is left running (lcd_busy): the next LCD access, or
+ * a write to its source buffer (lcd_sync), waits for it, so the main loop works
  * while the last strip of a frame goes out. */
-/* pins and SPI1: bsp/boards/fm1/fm1_lcd_hw.h */
+/* pins and SPI1: hal/fm1_lcd_hw.h */
 #ifndef LCD_BAUD
-#define LCD_BAUD 4u                /* lsb/(BAUD+1): 4 = 12 MHz */
+#define LCD_BAUD 0u                /* lsb/(BAUD+1): 0 = 60 MHz (~44 MHz effective, measured). Felucca's
+                                    * 4 (12 MHz) took 23 ms for a 240x72 strip, longer than the panel's
+                                    * 16.7 ms refresh: tearing. ST7789: <= ~62 MHz. The FM-1 has no TE
+                                    * line; the panel's scanline can be read (RDSCL on the data wire), but
+                                    * timing writes to it did not stop the tearing on hardware. */
 #endif
 
 static uint8_t lcd_small[64];
@@ -128,31 +131,4 @@ static void lcd_init(void)
     fm1_lcd_baud(LCD_BAUD);
     lcd_fill(0, 0, 240, 240, 0);
     lcd_cmd(0x29);
-}
-
-/* MENU > SCREEN OFF (ui.c scr_frame): the panel dark while the sound goes on. s 0: DISPOFF, SLPIN; 1: SLPOUT (the
- * panel wants 120 ms after it, and 120 ms after SLPIN before it: ui.c waits, a frame at a time, never here); 2: DISPON
- * (after the frame that redrew it all). The panel keeps its RAM asleep, but the UI redraws everything before it shows
- * (ui.force). The backlight stays on: PA2 is also the key matrix 595's /OE, so with it
- * high no button, key or knob reads and nothing could wake the screen (#157 follow-up, found on 1.1.5) */
-static void lcd_power(uint32_t s)
-{
-    if (s == 1u)
-        lcd_cmd(0x11);                             /* SLPOUT */
-    else if (s == 2u)
-        lcd_cmd(0x29);                             /* DISPON */
-    else {
-        lcd_cmd(0x28);                             /* DISPOFF */
-        lcd_cmd(0x10);                             /* SLPIN */
-    }
-}
-/* the crash screen, UPDATE, UBOOT: the panel on at once if SCREEN OFF had it asleep (blocking, ~240 ms; the IRQs
- * left as they are: the crash handler calls it) */
-static void lcd_wake_now(void)
-{
-    lcd_spin(3000000u);                            /* (120 ms after a SLPIN) */
-    lcd_cmd(0x11);
-    lcd_spin(3000000u);
-    lcd_cmd(0x29);
-    fm1_lcd_backlight(1);
 }

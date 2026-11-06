@@ -1,0 +1,14 @@
+# A project saved before the BDs had sends (sound revision 2: the 909 BD's PAN at 8)
+# loads with each PAN moved up two and its motion lane with it, the new sends at none.
+wait 300
+param 0 0 8 30
+lane 0 0 8 3 90
+sndrev 2
+tap SAVE
+wait 300
+reboot
+wait 300
+expect sound0.0.10 30
+expect sound0.0.8 0
+expect laneval0.0.10.3 90
+expect laneval0.0.8.3 -1

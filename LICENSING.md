@@ -1,127 +1,57 @@
-# Felucca licensing
+# X0X licensing
 
-Felucca is free software, licensed under the GNU General Public License, version 3 only
-(`GPL-3.0-only`, full text in `LICENSE`). That covers the code and its own assets. A few
-bundled or ported parts keep their own licences; they are listed below, and their licence
-texts are in `LICENSES/`.
+X0X is free software under the GNU General Public License, version 3 only
+(`GPL-3.0-only`, full text in `LICENSE`). It is a fork of Felucca and keeps Felucca's
+licence. If you distribute X0X, or firmware derived from it, you must give your
+recipients its complete corresponding source under the same licence.
 
-Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+## Where the code comes from
 
-## What is GPL-3.0-only
-
-Every file in this tree that carries an `SPDX-License-Identifier: GPL-3.0-only` header:
-
-- the firmware: `firmware/` (app, update loader, `firmware/hal/`; not `firmware/engines/`, MIT, nor `firmware/bsp/`, MPL-2.0: below)
-- the build script and tools: `build.sh`, `tools/` (not `tools/gen_waves.py`, the Hügelton Sample Pack: CC0 1.0, below)
-- the web installer, editor and their tests: `web/` (not the Fukiai font, below)
-- the host tests: `tests/`
-
-Four source files are ports and keep the licence of their originals:
-`firmware/src/phys_dsp.c` (DaisySP, MIT), `firmware/src/phys_symp.c` (Rings, MIT),
-`firmware/src/fm6_core.c` (msfa, Apache-2.0) and `firmware/src/adpcm_dsp.c` (snes_spc, LGPL-2.1-or-later; built only
-with `FELUCCA_ADPCM=1`, not by default). The firmware built with them is GPL-3.0-only as a whole.
-
-Six engines and the code they share are under the MIT licence, not the GPL. They are
-Hügelton Instruments' own work and live in their own repository, Felucca-Engines
-(<https://github.com/hugelton/Felucca-Engines>), included here as the git submodule
-`firmware/engines/`: the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines (`eng_analog.c`,
-`eng_lofi.c`, `eng_trio.c`, `eng_wheel.c`, `eng_noise.c`, `eng_phase.c`), the engine interface
-(`felucca_engine.h`), the shared DSP helpers (`dsp.c`) and the generator of their tables
-(`SPDX-License-Identifier: MIT`, `firmware/engines/LICENSE`, also
-`LICENSES/MIT-Felucca-Engines.txt`). The firmware built with them is GPL-3.0-only as a whole.
-Felucca's complete source includes that submodule: clone with `--recurse-submodules`, and
-give it along with the rest when you share the source. Each release also offers
-`felucca-X.Y.Z-source.tar.gz`, the whole source with the submodule's files in it (GitHub's
-own source archives leave the submodule empty).
-
-The hardware layer (the chip: clock, interrupts, guards, flash, USB, the update entry, the second core, the boot
-entry and libc; and the FM-1's board code: keys, LEDs, audio, display, ADC) is felucca-bsp
-(<https://github.com/hugelton/felucca-bsp>), included as the git submodule `firmware/bsp/`, under the Mozilla
-Public License 2.0 (`SPDX-License-Identifier: MPL-2.0`, `firmware/bsp/LICENSE`, also
-`LICENSES/MPL-2.0-felucca-bsp.txt`; its authors and origins in `firmware/bsp/NOTICE`). Felucca builds
-`firmware/bsp/chip/` and `firmware/bsp/boards/fm1/` with its own code; `firmware/hal/fm1_uart.h` (GPL-3.0-only) is
-Felucca's own and is used instead of the BSP's. AFTERTOUCH's key readings, `firmware/src/keytouch.{c,h}`, are
-MPL-2.0 too: a port of charlesvestal's fm1-base (<https://github.com/charlesvestal/fm1-base>, `lib/sense.c`,
-`lib/touch.c`, MPL-2.0). The firmware built with them is GPL-3.0-only as a whole; the MPL files stay MPL-2.0, and
-their source is part of Felucca's complete source as the engines' is.
-
-You may use, study, change and share Felucca under the GPL. If you distribute Felucca, or
-firmware derived from it, you must also give your recipients its complete corresponding
-source under the same licence. That includes devices that ship with modified Felucca inside.
-
-## Hügelton Instruments' own work
-
-All by Hügelton Instruments (Leo Kuroshita), in this tree:
-
-| What | Licence | Where |
+| What | Origin | Licence |
 | --- | --- | --- |
-| Felucca: firmware, tools, web pages, tests | GPL-3.0-only | `LICENSE` |
-| The DRUM voices and kit | GPL-3.0-only | `firmware/src/drum_voice.c`, `firmware/src/eng_drum.c` |
-| The Hügelton Sample Pack: Felucca's drum sounds, made by `tools/gen_waves.py`, from which the SLICE engine's BREAK is built; the script and the sounds it makes | CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>) | `tools/gen_waves.py` |
-| The controls picture | GPL-3.0-only | `docs/controls.jpg` |
-| The Fukiai icon font (<https://github.com/hugelton/Fukiai>): the firmware's icons (rasterised at build time by `tools/gen_aa_icons.py`) and the web editor's | MIT | `web/fukiai.ttf`, `LICENSES/MIT-Fukiai.txt`, `web/FUKIAI-LICENSE.txt` |
-| The ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines, the engine interface and the shared DSP helpers: Felucca-Engines (<https://github.com/hugelton/Felucca-Engines>) | MIT | `firmware/engines/`, `LICENSES/MIT-Felucca-Engines.txt` |
+| Platform: `firmware/hal/`, `firmware/loader/`, `firmware/src/{libc,lcd,gfx,usb,storage,ota}.c`, `tools/` (build, package, install, upload), `web/` (installer) | [Felucca](https://github.com/hugelton/Felucca), Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments; `usb.c` and `storage.c` changed for X0X | GPL-3.0-only |
+| `firmware/src/app/{slots,editor,panel,main_fm1}.c` | adapted from Felucca's `eng_sample.c`, `editor.c`, `panel.c`, `main.c` / `audio.c` | GPL-3.0-only |
+| 909 (`dsp/drum909*`, `dsp/fxbus*`) | ported from [9W9](https://github.com/athousanddetails/schwung-9W9) (athousanddetails), itself after [ER-99](https://github.com/matthewcieplak/er-99) (Matthew Cieplak) | GPL-3.0 |
+| 909 hi-hat, ride and crash samples (`assets/909/`) | ER-99 via 9W9 | GPL-3.0 |
+| 808 (`dsp/drum808*`) | ported from [8W8](https://github.com/athousanddetails/schwung-8W8) (athousanddetails); circuit models after the TR-808 service notes and Werner / Abel / Smith; rim shot after sc808 (Yoshinosuke Horiuchi / Sam Aaron) | GPL-3.0 |
+| 303 (`dsp/bass303*`) | ported from [schwung-303](https://github.com/charlesvestal/schwung-303): Open303 by Robin Schmidt (MIT), Devilfish extensions after jc303 (midilab), RAT drive after dm-Rat (Dave Mollen) | GPL-3.0 (Open303 parts MIT) |
+| TB-3PO (`seq/tb3po*`) | ported from [schwung-tb3po](https://github.com/charlesvestal/schwung-tb3po), itself a port of the Phazerville Hemisphere Suite `TB_3PO` applet (djphazer and contributors) | GPL-3.0 |
+| Break generator (`dsp/breaks*`) | ported from [schwung-breakbeat](https://github.com/mestela/schwung-breakbeat) (BB Gen) by mestela, **used with the author's permission** (that repository carries no licence file) | GPL-3.0-only here, by permission |
+| The second core's start-up and job hand-off (`firmware/hal/fm1_cpu1.*`) | X0X, after what [Melodee](https://github.com/keremimo/melodee) (keremimo)'s dual-core audio found, with [Jangada](https://github.com/zednaked/jangada) (zednaked)'s measurements and mailbox layout | GPL-3.0-only |
+| Speed-ups of the 303's render (passes over sub-blocks, the shared coefficients), the 909's sample voices and the 808's metal bank (`dsp/bass303*`, `dsp/drum909.c`, `dsp/drum808*`), the same samples bit for bit | after [Optimist](https://github.com/w0ts/optimist) (henri / hdavid), a fork of X0X | GPL-3.0-only |
+| The idea of a browser emulator for FM-1 firmware (`web/emu/`) | [Groove OS](https://www.groove-os.com/) by Peter Gombos, whose site runs its firmware in the browser; no code from it | credit only |
+| The screen reader's firmware side: `firmware/src/announce.c`, `tools/gen_words.py` | [fm1-base](https://github.com/charlesvestal/fm1-base) (`device/announce.c`, `tools/gen_words.py`), Copyright (C) 2026 Charles Vestal, copied by [fm1-reader](https://github.com/charlesvestal/fm1-reader)'s `tools/sync_announce.sh` | MPL-2.0 (compatible with the GPL: MPL-2.0 section 3.3) |
+| The flash parts the storage may use: `firmware/hal/fm1_flash_ok.h`, `tests/host/flash_ok_test.c` | [fm1-base](https://github.com/charlesvestal/fm1-base) (`device/fm1_flash_ok.h`, `tests/flash_ok_test.c`, fm1-base#35), Copyright (C) 2026 Laurens (@profikid) | MPL-2.0 (compatible with the GPL: MPL-2.0 section 3.3) |
+| The update handshake's tests: `tests/ota_hs_test.c`, `tests/host/installer_hs_test.mjs` | [felucca-bsp](https://github.com/hugelton/felucca-bsp)'s `tests/ota_test.c` and [fm1-base](https://github.com/charlesvestal/fm1-base)'s `tests/installer_hs_test.mjs`, Copyright (C) 2026 Charles Vestal | MPL-2.0 (compatible with the GPL: MPL-2.0 section 3.3) |
+| Everything else in `firmware/src/{app,dsp,seq}`, `host/`, `tests/` | X0X | GPL-3.0-only |
+
+No recorded breaks are in this tree or in the default firmware: the built-in break loops are
+generated at build time by X0X's own 909 code. `tools/import_breaks.py`,
+`tools/gen_break_bank.py` (`X0X_BREAK_BANK`) and `tools/upload_breaks.py` can put recordings
+of your choosing into a build or onto a device; those recordings keep their own copyright.
+
+## Felucca Assets
+
+Felucca's non-GPL assets — the icon atlas, the panel photo and the Hügelton drum pack —
+are **not** part of this fork and are not used by it. Felucca's section 7 additional
+permission concerns those assets only, so it is not needed here.
 
 ## Third-party material
 
 | What | Licence | Where |
 | --- | --- | --- |
-| Inter Tight font by The Inter Project Authors: the UI text, rasterised into the firmware at build time (`tools/gen_aa_font.py`; the generated tables are not offered as a font, and the font declares no Reserved Font Name) | SIL OFL 1.1 | `assets/fonts/InterTight[wght].ttf`, `LICENSES/OFL-InterTight.txt` (also `assets/fonts/OFL.txt`) |
-| Instrument samples (Versilian Studios VSCO-2 Community Edition, VCSL): the SAMPLE sets, also the SLICE engine's PIANO (the PIANO set's middle C) | CC0 1.0 | `assets/samples-cc0/`, provenance in `ATTRIBUTION.txt` there |
-| DaisySP by Electrosmith, Corp and Emilie Gillet (<https://github.com/electro-smith/DaisySP>): the PHYS engine's modal and string models and the resonator, ported to fixed point | MIT | `firmware/src/phys_dsp.c`, `LICENSES/MIT-DaisySP.txt` |
-| Rings by Emilie Gillet (<https://github.com/pichenettes/eurorack>): the PHYS engine's sympathetic strings, ported to fixed point | MIT | `firmware/src/phys_symp.c`, `LICENSES/MIT-Rings.txt` |
-| snes_spc 0.9.0 by Shay Green (<http://www.slack.net/~ant/>): the ADPCM engine's DSP (BRR decoding, Gaussian interpolation, ADSR and GAIN envelopes, noise, echo and FIR), ported to C one voice at a time by ugotworms; `tools/gen_adpcm.py`'s BRR decoder follows its `decode_brr`. Built only with `FELUCCA_ADPCM=1` (off by default) | LGPL-2.1-or-later | `firmware/src/adpcm_dsp.c`, `LICENSES/LGPL-2.1-snes_spc.txt` |
-| msfa by Google Inc. and Pascal Gauthier, from Dexed (<https://github.com/asb2m10/dexed>): the FM6 engine's synthesis, ported to integer C (Dexed itself is GPL-3.0; only msfa is used; the FM6 factory patches are Felucca's own) | Apache-2.0 | `firmware/src/fm6_core.c`, `LICENSES/Apache-2.0-msfa.txt` |
-| klattsch by Tony Gies (<https://github.com/tgies/klattsch>): design reference for the VOICE engine; no code copied. Formant data from Klatt (1980) / Hillenbrand et al. (1995) | MIT (klattsch) | credit only |
-| The second core: Melodee's by keremimo (<https://github.com/keremimo/melodee>), in felucca-bsp under MPL-2.0 by agreement, with charlesvestal's start and API (X0X, <https://github.com/charlesvestal/fm1-x0x>) | MPL-2.0 | `firmware/bsp/chip/fm1_cpu1.{h,S}`, `firmware/bsp/NOTICE` |
-| The parts' split across the two cores, its measurements and hardening after Jangada by zednaked (<https://github.com/zednaked/jangada>); credited in its files | GPL-3.0 | `firmware/src/fx.c`, `tests/c1_host.h`, `tests/dualcore_test.c` |
-| JieLi AC79 SDK by JieLi Technology: three of its files go into every `.fwsc` package (below); none are in this tree | Apache-2.0 | `LICENSES/Apache-2.0.txt` |
-
-On the device, HOME held > ABOUT opens the information screen; turning PRESETS scrolls on into
-CREDITS, a short list of these authors, licences and source URLs.
-
-## JieLi SDK files in the packages (Apache-2.0)
-
-A `.fwsc` package made by `tools/build.py` (with `tools/fm1pkg_make.py`; this is the package the
-web installer installs) holds three unmodified files from the JieLi AC79 SDK
-(<https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK>, `cpu/wl82/tools/`). They are read from your SDK
-checkout at build time (see BUILDING.md); no SDK files are in this tree.
-
-| File in the package | What it is |
-| --- | --- |
-| `uboot.boot` | the first-stage boot loader (SPL) |
-| `cfg_tool.bin` | the chip configuration block |
-| `eq_cfg_hw.bin` | the default hardware EQ table |
-
-They are licensed under the Apache License, Version 2.0 (`LICENSES/Apache-2.0.txt`), not under
-the GPL, and their copyright stays with JieLi Technology. The SDK has no NOTICE file. Apache-2.0
-files may be distributed together with GPL-3.0 code; Felucca itself stays GPL-3.0-only.
-
-Every distribution of a package carries the licence texts with it: the release folder
-(`tools/build.py --release`) and the site (`web/make_site.py`, next to the package in
-`firmware/` and linked from the installer page).
-
-## No vendor material
-
-No M-VAVE material is part of Felucca. The firmware links no vendor code and contains no vendor
-data, and the packages hold only Felucca and the three SDK files above. The installer's
-"Return to official V15" holds only the official file's size and SHA-256: you select the
-official firmware file you downloaded yourself, and it is checked and installed in your browser,
-never uploaded or redistributed.
-
-## Contributions
-
-Contributions are welcome under GPL-3.0-only. Changes to the six engines and the code they
-share (`firmware/engines/`) go to the Felucca-Engines repository, under the MIT licence.
+| Barlow Semi Condensed (The Barlow Project Authors), the default UI face | SIL OFL 1.1 | `assets/fonts/BarlowSemiCondensed-*.ttf`, `assets/fonts/Barlow-OFL.txt` |
+| Terminus (Dimitar Toshkov Zhekov), the `terminus` font set | SIL OFL 1.1 | `assets/fonts/ter-u*.bdf`, `assets/fonts/Terminus-LICENSE.txt` |
+| Fukiai icon font (Hügelton Instruments), web pages only | MIT | `web/fukiai.ttf`, `web/FUKIAI-LICENSE.txt` |
+| JieLi AC79 SDK: `uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin` are read from your SDK checkout at build time and placed in the package; no SDK files are in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK> |
 
 ## Trademarks
 
-"Felucca" and "Hügelton Instruments" are names of Hügelton Instruments.
-
-"M-VAVE" and "FM-1" are trademarks of their respective owners. Felucca is independent
-firmware that runs on FM-1 hardware. It is not affiliated with, endorsed by or supported
-by those owners.
+"Felucca" and "Hügelton Instruments" are names of Hügelton Instruments. "M-VAVE" and
+"FM-1" are trademarks of their respective owners. TR-808, TR-909 and TB-303 are
+trademarks of Roland Corporation, used only to describe what the parts emulate. X0X is
+independent firmware; it is not affiliated with, endorsed by or supported by any of them.
 
 ## Radio
 
-Felucca never enables the Bluetooth / Wi-Fi radio of the hardware.
+X0X never enables the Bluetooth / Wi-Fi radio of the hardware.
