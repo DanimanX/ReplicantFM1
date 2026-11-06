@@ -15,98 +15,98 @@ def generate():
     emit("shot shot_00_splash.png")
 
     # --- 1. Sound Design Setup ---
-    # 909 BD: Hard techno kick (driven, tuned, attack click, saturated punch)
+    # 909 BD: Hard techno kick (clean attack click, solid sub punch, no harsh fuzz)
     emit("param 0 0 0 36")   # Tune
-    emit("param 0 0 1 65")   # Attack (hard transient click)
-    emit("param 0 0 2 92")   # Decay (deep sub punch)
-    emit("param 0 0 3 115")  # Level (punchy)
-    emit("param 0 0 4 40")   # Pitch depth
+    emit("param 0 0 1 65")   # Attack (punchy transient click)
+    emit("param 0 0 2 90")   # Decay (deep sub punch)
+    emit("param 0 0 3 100")  # Level (clean unity)
+    emit("param 0 0 4 35")   # Pitch depth
     emit("param 0 0 5 48")   # Pitch
-    emit("param 0 0 6 52")   # Drive (distorted kick!)
-    emit("param 0 0 7 2")    # Dist type = SAT
+    emit("param 0 0 6 20")   # Drive (subtle warm punch, not harsh)
+    emit("param 0 0 7 0")    # Dist type = Off (clean punchy kick)
 
     # 909 SD: Snappy snare for rolls
     emit("param 0 1 0 64")   # Tune
     emit("param 0 1 1 75")   # Tone
     emit("param 0 1 2 80")   # Snappy
-    emit("param 0 1 4 80")   # Level
-    emit("param 0 1 5 35")   # Drive
+    emit("param 0 1 4 75")   # Level
+    emit("param 0 1 5 15")   # Drive (clean)
 
     # 909 Clap
-    emit("param 0 6 0 120")  # Level
-    emit("param 0 6 2 65")   # Tail
-    emit("param 0 6 3 45")   # Drive
+    emit("param 0 6 0 105")  # Level
+    emit("param 0 6 2 60")   # Tail
+    emit("param 0 6 3 20")   # Drive (clean)
     emit("param 0 6 5 25")   # Rev send
 
     # 909 Hats
     emit("param 0 7 0 85")   # CH Decay
-    emit("param 0 7 1 95")   # CH Level
-    emit("param 0 8 0 102")  # OH Decay (sizzling open hat)
-    emit("param 0 8 1 90")   # OH Level
-    emit("param 0 10 1 80")  # Ride Level
+    emit("param 0 7 1 90")   # CH Level
+    emit("param 0 8 0 100")  # OH Decay (sizzling open hat)
+    emit("param 0 8 1 85")   # OH Level
+    emit("param 0 10 1 75")  # Ride Level
 
-    # 303 A: Blade Acid Lead (Saw, High Reso, Devilfish Drive + RAT)
+    # 303 A: Blade Acid Lead (Saw, High Reso, Smooth Warm Drive)
     emit("param 2 0 0 48")   # Cutoff (starts dark)
-    emit("param 2 0 1 110")  # Reso (110/127 - screaming diode resonance)
-    emit("param 2 0 2 95")   # EnvMod
-    emit("param 2 0 3 76")   # Decay
-    emit("param 2 0 4 125")  # Accent
+    emit("param 2 0 1 106")  # Reso (screaming liquid diode resonance)
+    emit("param 2 0 2 92")   # EnvMod
+    emit("param 2 0 3 75")   # Decay
+    emit("param 2 0 4 120")  # Accent
     emit("param 2 0 5 0")    # Wave = Saw
     emit("param 2 0 6 64")   # Tune
-    emit("param 2 0 7 105")  # Volume
-    emit("param 2 0 8 75")   # Drive (Devilfish drive)
-    emit("param 2 0 9 2")    # DrvTyp = RAT distortion!
+    emit("param 2 0 7 100")  # Volume (clean unity)
+    emit("param 2 0 8 35")   # Drive (warm soft drive, no harsh clipping)
+    emit("param 2 0 9 1")    # DrvTyp = Soft saturation
     emit("param 2 0 10 26")  # Slide time
 
-    # 303 B: Screaming High Counter-Acid (Square, RAT distortion)
+    # 303 B: Screaming High Counter-Acid (Square, Warm Drive)
     emit("param 2 1 0 65")   # Cutoff
-    emit("param 2 1 1 114")  # Reso (screaming)
-    emit("param 2 1 2 95")   # EnvMod
+    emit("param 2 1 1 110")  # Reso (screaming liquid)
+    emit("param 2 1 2 92")   # EnvMod
     emit("param 2 1 3 65")   # Decay
-    emit("param 2 1 4 122")  # Accent
+    emit("param 2 1 4 118")  # Accent
     emit("param 2 1 5 1")    # Wave = Square
     emit("param 2 1 6 64")   # Tune
-    emit("param 2 1 7 98")   # Volume
-    emit("param 2 1 8 82")   # Drive
-    emit("param 2 1 9 2")    # DrvTyp = RAT distortion!
+    emit("param 2 1 7 92")   # Volume
+    emit("param 2 1 8 35")   # Drive (clean warm drive)
+    emit("param 2 1 9 1")    # DrvTyp = Soft saturation
     emit("param 2 1 10 28")  # Slide time
 
     # Roland SH-101: Heavy sub/saw low-end
     emit("param 1 0 0 1")    # Octave
-    emit("param 1 0 1 115")  # Saw level
-    emit("param 1 0 2 65")   # Pulse level
-    emit("param 1 0 3 110")  # Sub-Osc level
+    emit("param 1 0 1 110")  # Saw level
+    emit("param 1 0 2 60")   # Pulse level
+    emit("param 1 0 3 105")  # Sub-Osc level
     emit("param 1 0 8 68")   # Cutoff
-    emit("param 1 0 9 40")   # Reso
-    emit("param 1 0 10 75")  # EnvMod
+    emit("param 1 0 9 35")   # Reso
+    emit("param 1 0 10 70")  # EnvMod
     emit("param 1 0 12 4")   # Attack
     emit("param 1 0 13 65")  # Decay
     emit("param 1 0 14 30")  # Sustain
     emit("param 1 0 15 25")  # Release
 
     # Breakbeat Slicer
-    emit("param 3 0 0 110")  # BRK Level
-    emit("param 5 4 0 100")  # MIX BRK Level
+    emit("param 3 0 0 100")  # BRK Level
+    emit("param 5 4 0 90")   # MIX BRK Level
     emit("param 5 4 2 25")   # BRK Rev send
     emit("param 5 4 3 35")   # BRK Delay send
 
-    # Master Compressor & Saturation
-    emit("param 6 0 6 22")   # Master PUMP (22 dB kick-keyed ducking!)
-    emit("param 4 0 2 65")   # Master Tube Drive
-    emit("param 4 0 1 3")    # Master Saturation (SAT)
+    # Master Compressor & FX (Clean & Punchy)
+    emit("param 6 0 6 14")   # Master PUMP (14 dB musical kick-keyed ducking)
+    emit("param 4 0 2 15")   # Master Tube Drive (subtle analog warmth)
+    emit("param 4 0 1 0")    # Master Saturation = Off (clean mix bus)
     emit("param 4 0 8 7")    # Delay Time (1/8.)
-    emit("param 4 0 9 55")   # Delay Feedback
-    emit("param 4 0 11 65")  # Delay Level
+    emit("param 4 0 9 52")   # Delay Feedback
+    emit("param 4 0 11 60")  # Delay Level
     emit("param 4 1 1 45")   # Ping-Pong Width
 
     # Mixer Levels & Sends & Stereo Pans
-    emit("param 5 0 0 105")  # 909 Level
-    emit("param 5 1 0 95")   # 101 Level
-    emit("param 5 2 0 105")  # 303A Level
+    emit("param 5 0 0 100")  # 909 Level
+    emit("param 5 1 0 90")   # 101 Level
+    emit("param 5 2 0 100")  # 303A Level
     emit("param 5 2 2 25")   # 303A Rev send
     emit("param 5 2 3 45")   # 303A Delay send
     emit("param 5 2 4 48")   # 303A Pan (slightly Left)
-    emit("param 5 3 0 100")  # 303B Level
+    emit("param 5 3 0 95")   # 303B Level
     emit("param 5 3 2 30")   # 303B Rev send
     emit("param 5 3 3 50")   # 303B Delay send
     emit("param 5 3 4 80")   # 303B Pan (slightly Right)
@@ -325,7 +325,7 @@ def generate():
     emit("param 2 0 0 124") # maximum screaming cutoff
     emit("param 2 1 0 120")
     emit("param 4 0 9 55")   # reset delay feedback
-    emit("param 6 0 6 24")   # MAX PUMP (24 dB ducking!)
+    emit("param 6 0 6 15")   # Master PUMP (15 dB kick ducking on the drop)
     emit("shot shot_08_drop_pump.png")
     emit("wait 1620")
     emit("wait 1620")
