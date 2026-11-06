@@ -1098,6 +1098,53 @@ int main(int argc, char **argv)
             run_ms(1);
         } else if (!strcmp(cmd, "master"))
             master = (uint32_t)atoi(a);
+        else if (!strcmp(cmd, "tempo")) {
+            float bpm = (float)atof(a);
+            seq.bpm = bpm;
+            proj.set.bpm_x10 = (uint16_t)(bpm * 10.0f + 0.5f);
+        } else if (!strcmp(cmd, "partmute")) {
+            int p = atoi(a), on = atoi(b);
+            if (on) seq.mute |= seq_part_mask(p);
+            else seq.mute &= ~seq_part_mask(p);
+        } else if (!strcmp(cmd, "bclear")) {
+            int p = atoi(a);
+            bpart_t *bp = (p == 0) ? &proj.pat[seq.ppat[PART_303A]].bass[0]
+                        : (p == 1) ? &proj.pat[seq.ppat[PART_303B]].bass[1]
+                        : &proj.pat[seq.ppat[PART_101]].sh101;
+            for (int k = 0; k < NSTEPS; k++) {
+                bp->step[k].note = 36;
+                bp->step[k].flags = G_REST;
+            }
+        } else if (!strcmp(cmd, "bstep")) {
+            int p = atoi(a), st = atoi(b), note = atoi(c), flags = atoi(line_d);
+            bpart_t *bp = (p == 0) ? &proj.pat[seq.ppat[PART_303A]].bass[0]
+                        : (p == 1) ? &proj.pat[seq.ppat[PART_303B]].bass[1]
+                        : &proj.pat[seq.ppat[PART_101]].sh101;
+            if (st >= 0 && st < NSTEPS) {
+                bp->step[st].note = (uint8_t)note;
+                bp->step[st].flags = (uint8_t)flags;
+            }
+            if (line_e[0]) bp->len = (uint8_t)atoi(line_e);
+        } else if (!strcmp(cmd, "drumclear")) {
+            dpart_t *dp = &proj.pat[seq.ppat[PART_909]].drum;
+            memset(dp->hit, 0, sizeof dp->hit);
+            memset(dp->accent, 0, sizeof dp->accent);
+        } else if (!strcmp(cmd, "drumstep")) {
+            int trk = atoi(a), st = atoi(b), on = atoi(c), acc = atoi(line_d);
+            dpart_t *dp = &proj.pat[seq.ppat[PART_909]].drum;
+            if (trk >= 0 && trk < NDRUM && st >= 0 && st < NSTEPS) {
+                if (on) sm_set(dp->hit[trk], st);
+                else dp->hit[trk][st >> 5] &= ~(1u << (st & 31));
+                if (acc) sm_set(dp->accent, st);
+            }
+        } else if (!strcmp(cmd, "brkstep")) {
+            int st = atoi(a), slice = atoi(b);
+            brkpart_t *brk = &proj.pat[seq.ppat[PART_BRK]].brk;
+            if (st >= 0 && st < 16) {
+                brk->steps |= (1u << st);
+                brk->slice[st] = (uint8_t)slice;
+            }
+        }
         else if (!strcmp(cmd, "slot")) {                /* slot K NAME a.wav [b.wav ...]: one zone each */
             char *tok, *rest = line + 4;
             int k, z = 0;

@@ -18,7 +18,7 @@ Over USB, the FM-1 acts as a class-compliant MIDI controller/interface and a 24-
 
 ## Video Demo
 
-🎬 **[Watch the Hard Techno Demo Video (MP4)](replicant_fm1_hard_techno_promo.mp4)** *(146 BPM, 50s)*: showcasing the TR-909 drums, Roland SH-101 lead, dual TB-303 acid basslines with TB-3PO generative engine, real-time breakbeat slicer, tape delay, and Master Pump sidechain compressor in the signature VIRUS toxic green interface.
+🎬 **[Watch the Blade Acid Techno Demo Video (MP4)](replicant_fm1_hard_techno_promo.mp4)** *(148 BPM, 52s)*: showcasing the iconic Pump Panel Blade Acid 303 theme with Devilfish RAT distortion, screaming dual TB-303s, hard TR-909 kick punch, Roland SH-101 sub-bass, real-time breakbeat slicer, tape delay, and Master Pump sidechain compressor in the signature VIRUS toxic green interface.
 
 ---
 

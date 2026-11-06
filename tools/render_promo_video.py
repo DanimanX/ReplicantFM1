@@ -142,28 +142,25 @@ def main():
         draw.ellipse([40, 32, 54, 46], fill=rec_dot_col)
         draw.text((64, 27), "LIVE HARDWARE", font=f_mono, fill=C_WHITE)
         
-        # Pill 146 BPM
+        # Pill 148 BPM
         draw.rectangle([210, 22, 330, 58], fill=C_CARD, outline=C_CARD_BORDER, width=1)
-        draw.text((270, 40), "146.0 BPM", font=f_pill, fill=C_LIME, anchor="mm")
+        draw.text((270, 40), "148.0 BPM", font=f_pill, fill=C_LIME, anchor="mm")
 
-        draw.rectangle([345, 22, 485, 58], fill=C_CARD, outline=C_CARD_BORDER, width=1)
-        draw.text((415, 40), "HARD TECHNO", font=f_pill, fill=C_GREEN, anchor="mm")
+        draw.rectangle([345, 22, 510, 58], fill=C_CARD, outline=C_CARD_BORDER, width=1)
+        draw.text((427, 40), "BLADE ACID TECHNO", font=f_pill, fill=C_GREEN, anchor="mm")
 
         # Center Title
         draw.text((W // 2, 32), "REPLICANT FM-1 v2.0", font=f_sub, fill=C_LIME, anchor="mm")
-        draw.text((W // 2, 65), "THE VIRUS GROOVEBOX FOR M-VAVE FM-1", font=f_mono, fill=C_GREEN, anchor="mm")
+        draw.text((W // 2, 65), "BLADE ACID // HARD RAVE CUT (M-VAVE FM-1)", font=f_mono, fill=C_GREEN, anchor="mm")
 
         # Right Indicators (Part activity depending on time)
         parts_active = {
-            "909": t >= 0,
-            "101": t >= 0,
-            "303A": t >= 6.6,
-            "303B": t >= 13.2,
-            "BRK": t >= 13.2,
+            "909": (6.5 <= t < 32.5) or (t >= 39.0 and t < 48.7),
+            "101": (6.5 <= t < 32.5) or (t >= 39.0 and t < 48.7),
+            "303A": t < 48.7,
+            "303B": (13.0 <= t < 48.7),
+            "BRK": (26.0 <= t < 32.5) or (t >= 39.0 and t < 48.7),
         }
-        # In breakdown (26s - 34s) 909 kick drops out
-        if 26.0 <= t < 33.0:
-            parts_active["909"] = False
 
         px = 1450
         for pname, pcol, pact in [
@@ -181,13 +178,13 @@ def main():
             px += 66
 
         # CPU badge
-        draw.text((1840, 40), "CPU 58%", font=f_pill, fill=C_LIME, anchor="mm")
+        draw.text((1840, 40), "CPU 62%", font=f_pill, fill=C_LIME, anchor="mm")
 
         # --- SCENE LOGIC ---
-        if t < 4.5:
-            # SCENE 1: HOOK / VIRUS BOOT SCREEN
-            draw.text((W // 2, 135), "TURNING A $40 SYNTH INTO A MONSTER GROOVEBOX", font=f_title, fill=C_WHITE, anchor="mm")
-            draw.text((W // 2, 185), "STANDALONE ACID & HARD TECHNO FIRMWARE FOR THE M-VAVE FM-1", font=f_sub, fill=C_LIME, anchor="mm")
+        if t < 6.5:
+            # SCENE 1: HOOK / BLADE ACID TECHNO // BLOOD RAVE THEME
+            draw.text((W // 2, 135), "BLADE ACID TECHNO // HARD RAVE REMIX", font=f_huge, fill=C_WHITE, anchor="mm")
+            draw.text((W // 2, 185), "ICONIC PUMP PANEL 303 ACID RIFF • DEVILFISH RAT DISTORTION • 148 BPM", font=f_sub, fill=C_LIME, anchor="mm")
 
             if splash_img:
                 sx = W // 2 - 230
@@ -196,12 +193,12 @@ def main():
                 frame.paste(splash_img, (sx, sy))
 
             # Status Box Below
-            draw.rectangle([460, 730, 1460, 810], fill=C_CARD, outline=C_CARD_BORDER, width=2)
-            draw.text((W // 2, 755), "BOOTING VIRUS ARCHITECTURE: 909 + SH-101 + DUAL 303 + BREAK SLICER", font=f_card_h, fill=C_GREEN, anchor="mm")
-            draw.text((W // 2, 785), "100% STANDALONE HARDWARE DSP • 24-BIT USB AUDIO • BROWSER ONE-CLICK INSTALL", font=f_mono, fill=C_WHITE, anchor="mm")
+            draw.rectangle([440, 730, 1480, 810], fill=C_CARD, outline=C_CARD_BORDER, width=2)
+            draw.text((W // 2, 755), "RUNNING STANDALONE VIRUS ARCHITECTURE ON THE $40 M-VAVE FM-1", font=f_card_h, fill=C_GREEN, anchor="mm")
+            draw.text((W // 2, 785), "DUAL 303 DEVILFISH + TR-909 HARD KICK + SH-101 SUB + BREAK SLICER • 24-BIT USB AUDIO", font=f_mono, fill=C_WHITE, anchor="mm")
 
-        elif t < 13.5:
-            # SCENE 2: TR-909 + SH-101
+        elif t < 13.0:
+            # SCENE 2: THE 909 HARD KICK DROPS IN + SH-101
             draw.text((W // 2, 125), "ENGINE 01 // ROLAND TR-909  +  ENGINE 02 // ROLAND SH-101", font=f_title, fill=C_LIME, anchor="mm")
             draw.text((W // 2, 168), "AUTHENTIC PUNCHY 909 DRUM MACHINE & PHYSICAL-MODELLED ANALOG LEAD/BASS SYNTH", font=f_mono, fill=C_WHITE, anchor="mm")
 
@@ -209,7 +206,7 @@ def main():
             lx, ly = 80, 200
             draw.rectangle([lx, ly, lx + 860, ly + 580], fill=C_CARD, outline=C_CARD_BORDER, width=2)
             draw.rectangle([lx, ly, lx + 860, ly + 55], fill=(14, 38, 20), outline=C_CARD_BORDER, width=1)
-            draw.text((lx + 20, ly + 28), "TR-909 DRUM MACHINE", font=f_card_h, fill=C_AMBER, anchor="lm")
+            draw.text((lx + 20, ly + 28), "TR-909 DRUM MACHINE (HARD CLUB PUNCH)", font=f_card_h, fill=C_AMBER, anchor="lm")
             draw.text((lx + 840, ly + 28), "[ 11 TRACKS + KIT ]", font=f_pill, fill=C_GREEN, anchor="rm")
             if s_909:
                 frame.paste(s_909, (lx + 20, ly + 75))
@@ -219,10 +216,10 @@ def main():
             bx = lx + 440
             by = ly + 110
             bullets_909 = [
-                ("Kick Drum", "Heavy physical modelled kick with punch & tune decay"),
-                ("Snare & Rim", "Sharp snappy snare with snappy tone & rimshot"),
-                ("Hats & Cymbals", "Dedicated Closed Hat, Open Hat, Ride & Crash"),
-                ("Sequencer", "16-step grid with accents, roll ratchets & shuffle")
+                ("Hard Punch Kick", "Tuned transient click with overdriven sub decay"),
+                ("Snappy Snare & Clap", "Driven rimshot, snappy snare & layered clap on 2 & 4"),
+                ("Sizzling Open Hat", "Dedicated crisp closed hat & long open hat sizzle"),
+                ("Rave Ride Cymbal", "Wall-of-sound ride driving 148 BPM energy")
             ]
             for title, desc in bullets_909:
                 draw.text((bx, by), "● " + title, font=f_card_h, fill=C_LIME)
@@ -246,24 +243,24 @@ def main():
                 ("CEM3340 VCO", "Band-limited Saw, Pulse with PWM, Sub-Osc & Noise"),
                 ("IR3109 VCF", "24 dB/oct 4-pole ZDF Low-Pass with self-oscillation"),
                 ("Envelopes & LFO", "Snappy ADSR envelope, Triangle/Square/S&H LFO"),
-                ("Acid Overdrive", "Analog soft-clip drive, portamento & accent boost")
+                ("Pounding Sub-Bass", "Dedicated 1-octave sub oscillator driving low end")
             ]
             for title, desc in bullets_101:
                 draw.text((bx, by), "● " + title, font=f_card_h, fill=C_LIME)
                 draw.text((bx, by + 34), desc, font=f_mono, fill=C_GREEN)
                 by += 85
 
-        elif t < 23.5:
-            # SCENE 3: DUAL 303 + TB-3PO
-            draw.text((W // 2, 125), "ENGINE 03 & 04 // DUAL TB-303  +  TB-3PO GENERATOR", font=f_title, fill=C_LIME, anchor="mm")
-            draw.text((W // 2, 168), "TWO INDEPENDENT ACID BASSLINES (303A & 303B) WITH REAL-TIME ALGORITHMIC GENERATION", font=f_mono, fill=C_WHITE, anchor="mm")
+        elif t < 26.0:
+            # SCENE 3: DUAL 303 + DEVILFISH RAT DISTORTION
+            draw.text((W // 2, 125), "ENGINE 03 & 04 // DUAL TB-303 (DEVILFISH RAT DISTORTION)", font=f_title, fill=C_LIME, anchor="mm")
+            draw.text((W // 2, 168), "TWO STEREO ACID LINES: PUMP PANEL BLADE THEME + SCREAMING COUNTERPOINT", font=f_mono, fill=C_WHITE, anchor="mm")
 
             # Left Card: TB-303
             lx, ly = 80, 200
             draw.rectangle([lx, ly, lx + 860, ly + 580], fill=C_CARD, outline=C_CARD_BORDER, width=2)
             draw.rectangle([lx, ly, lx + 860, ly + 55], fill=(14, 38, 20), outline=C_CARD_BORDER, width=1)
             draw.text((lx + 20, ly + 28), "DUAL 303 ACID ENGINES (303A & 303B)", font=f_card_h, fill=C_LIME, anchor="lm")
-            draw.text((lx + 840, ly + 28), "[ DEVILFISH DRIVE ]", font=f_pill, fill=C_CYAN, anchor="rm")
+            draw.text((lx + 840, ly + 28), "[ DEVILFISH RAT DRIVE ]", font=f_pill, fill=C_CYAN, anchor="rm")
             if s_303:
                 frame.paste(s_303, (lx + 20, ly + 75))
                 draw.rectangle([lx + 18, ly + 73, lx + 422, ly + 477], outline=C_LIME, width=2)
@@ -271,10 +268,10 @@ def main():
             bx = lx + 440
             by = ly + 110
             bullets_303 = [
-                ("Dual 303s in Stereo", "Run two 303 lines simultaneously with separate pans"),
-                ("Diode Ladder VCF", "Iconic acid squelch, liquid resonance & scream"),
-                ("Devilfish Mod", "High-gain distortion, envelope mod & resonance boost"),
-                ("Acid Sequencer", "Full pitch, slide, tie, accent & probability per step")
+                ("Stereo Acid Lines", "303A panned left, 303B panned right with ping-pong delay"),
+                ("Diode Ladder VCF", "Iconic acid squelch, liquid resonance & piercing scream"),
+                ("Devilfish RAT Drive", "High-gain aggressive clipping distortion mod"),
+                ("Acid Slides & Accents", "Authentic 60ms analog pitch glides and punchy accents")
             ]
             for title, desc in bullets_303:
                 draw.text((bx, by), "● " + title, font=f_card_h, fill=C_LIME)
@@ -285,7 +282,7 @@ def main():
             rx, ry = 980, 200
             draw.rectangle([rx, ry, rx + 860, ly + 580], fill=C_CARD, outline=C_CARD_BORDER, width=2)
             draw.rectangle([rx, ry, rx + 860, ry + 55], fill=(14, 38, 20), outline=C_CARD_BORDER, width=1)
-            draw.text((rx + 20, ry + 28), "TB-3PO ALGORITHMIC GENERATOR", font=f_card_h, fill=C_CYAN, anchor="lm")
+            draw.text((rx + 20, ry + 28), "TB-3PO ALGORITHMIC ACID ENGINE", font=f_card_h, fill=C_CYAN, anchor="lm")
             draw.text((rx + 840, ry + 28), "[ GENERATIVE ACID ]", font=f_pill, fill=C_LIME, anchor="rm")
             if s_tb3po:
                 frame.paste(s_tb3po, (rx + 20, ry + 75))
@@ -296,8 +293,8 @@ def main():
             bullets_tb3po = [
                 ("Algorithmic Engine", "Musical constraint models generate instant acid lines"),
                 ("Live Mutation", "OCT+ for fresh patterns, OCT- to mutate current line"),
-                ("Intelligent Slides", "Automatic placement of slides, accents & rests"),
-                ("Universal Support", "Generates lines for SH-101, 303A, and 303B!")
+                ("Dynamic Filter Sweep", "Real-time automated cutoff sweeps opening live"),
+                ("Universal Support", "Sequences SH-101, 303A, and 303B seamlessly!")
             ]
             for title, desc in bullets_tb3po:
                 draw.text((bx, by), "● " + title, font=f_card_h, fill=C_LIME)
@@ -306,8 +303,8 @@ def main():
 
         elif t < 32.5:
             # SCENE 4: BREAK SLICER & MASTER BUS
-            draw.text((W // 2, 125), "ENGINE 05 // BREAK SLICER  +  MASTER BUS COMPRESSOR PUMP", font=f_title, fill=C_LIME, anchor="mm")
-            draw.text((W // 2, 168), "8-SLICE REAL-TIME BREAKBEAT PLAYER WITH SIDECHAIN PUMP COMPRESSION & TAPE DELAY", font=f_mono, fill=C_WHITE, anchor="mm")
+            draw.text((W // 2, 125), "ENGINE 05 // BREAK SLICER  +  MASTER BUS PUMP COMPRESSION", font=f_title, fill=C_LIME, anchor="mm")
+            draw.text((W // 2, 168), "AMEN BREAK SLICED LIVE UNDER 909 KICK WITH KICK-KEYED DUCKING & TAPE DELAY", font=f_mono, fill=C_WHITE, anchor="mm")
 
             # Left Card: BREAK SLICER
             lx, ly = 80, 200
@@ -345,7 +342,7 @@ def main():
             bx = rx + 440
             by = ry + 110
             bullets_fx = [
-                ("Master Pump Comp", "Sidechain compressor driven directly by 909 kick!"),
+                ("Master Pump Comp", "24 dB sidechain ducking keyed directly to 909 kick!"),
                 ("Master Tube Drive", "Asymmetric warm tube drive & saturation on mix"),
                 ("Tape Delay", "Vintage ping-pong delay with wow/flutter tape wear"),
                 ("Stereo Reverb", "Spacious room & hall reverb with dampening")
@@ -355,12 +352,12 @@ def main():
                 draw.text((bx, by + 34), desc, font=f_mono, fill=C_GREEN)
                 by += 85
 
-        elif t < 43.0:
-            # SCENE 5: BREAKDOWN & MASSIVE DROP!
-            if t < 33.0:
-                # The Breakdown
-                draw.text((W // 2, 130), "// BREAKDOWN & MASTER FILTER SWEEP //", font=f_title, fill=C_AMBER, anchor="mm")
-                draw.text((W // 2, 175), "909 KICK MUTED • LOW-PASS RESONANT FILTER SWEEPING DOWN...", font=f_sub, fill=C_WHITE, anchor="mm")
+        elif t < 48.7:
+            # SCENE 5: BREAKDOWN & MASSIVE HARD DROP!
+            if t < 39.0:
+                # The Blood Rave Breakdown
+                draw.text((W // 2, 130), "// THE BLOOD RAVE BREAKDOWN //", font=f_title, fill=C_AMBER, anchor="mm")
+                draw.text((W // 2, 175), "909 KICK MUTED • SCREAMING DUAL 303S ECHOING IN THE DARK...", font=f_sub, fill=C_WHITE, anchor="mm")
 
                 if s_breakdown:
                     bx = W // 2 - 230
@@ -368,14 +365,15 @@ def main():
                     draw.rectangle([bx - 6, by - 6, bx + 466, by + 466], outline=C_AMBER, width=3)
                     frame.paste(s_breakdown, (bx, by))
 
-                draw.rectangle([480, 720, 1440, 800], fill=(20, 10, 5), outline=C_AMBER, width=2)
-                draw.text((W // 2, 760), "BUILDING TENSION FOR THE DROP...", font=f_title, fill=C_LIME, anchor="mm")
+                draw.rectangle([440, 720, 1480, 800], fill=(20, 10, 5), outline=C_AMBER, width=2)
+                draw.text((W // 2, 745), "SNARE ROLLS ACCELERATING • FILTER RESONANCE AT MAXIMUM!", font=f_title, fill=C_LIME, anchor="mm")
+                draw.text((W // 2, 775), "GET READY FOR THE 148 BPM HARD TECHNO DROP...", font=f_mono, fill=C_WHITE, anchor="mm")
             else:
                 # THE DROP!
-                flash = (t < 33.5)
+                flash = (t < 39.5)
                 drop_col = C_WHITE if flash else C_LIME
-                draw.text((W // 2, 125), "*** THE HARD TECHNO DROP ***", font=f_huge, fill=drop_col, anchor="mm")
-                draw.text((W // 2, 175), "ALL 5 ENGINES FIRING AT 146 BPM • 100% STANDALONE ON FM-1", font=f_sub, fill=C_GREEN, anchor="mm")
+                draw.text((W // 2, 125), "*** THE MAXIMUM HARD TECHNO DROP ***", font=f_huge, fill=drop_col, anchor="mm")
+                draw.text((W // 2, 175), "ALL 5 ENGINES FIRING AT 148 BPM • 100% STANDALONE ON M-VAVE FM-1", font=f_sub, fill=C_GREEN, anchor="mm")
 
                 # Show Front Panel
                 if panel_img:
